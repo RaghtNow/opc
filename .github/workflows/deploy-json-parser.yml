@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - 'apps/json-parser/**'
+      - '.github/workflows/deploy-json-parser.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'apps/json-parser/**'
+      - '.github/workflows/deploy-json-parser.yml'
   workflow_dispatch:
 
 env:
