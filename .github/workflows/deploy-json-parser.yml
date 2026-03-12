@@ -50,9 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -61,57 +58,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/opc
-            
-            # 创建 Docker 网络
             docker network create opc-network 2>/dev/null || echo "网络已存在"
-            
-            # 首次部署：上传配置文件
-            if [ ! -f docker-compose.yml ]; then
-              echo "首次部署：上传配置文件..."
-              mkdir -p nginx/{conf.d,ssl,logs}
-              
-              # 写入 docker-compose.yml
-              cat > docker-compose.yml << 'EOF'
-            version: '3.8'
-            
-            services:
-              json-parser:
-                image: kdqg/opc-json-parser:latest
-                container_name: opc-json-parser
-                ports:
-                  - "8081:80"
-                restart: unless-stopped
-                labels:
-                  - "com.opc.service=json-parser"
-                networks:
-                  - opc-network
-            
-              nginx:
-                image: nginx:alpine
-                container_name: opc-nginx
-                ports:
-                  - "80:80"
-                  - "443:443"
-                volumes:
-                  - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-                  - ./nginx/conf.d:/etc/nginx/conf.d:ro
-                  - ./nginx/ssl:/etc/nginx/ssl:ro
-                  - ./nginx/logs:/var/log/nginx
-                depends_on:
-                  - json-parser
-                restart: unless-stopped
-                networks:
-                  - opc-network
-            
-            networks:
-              opc-network:
-                external: true
-            EOF
-              
-              echo "✅ 配置文件已创建"
-            fi
-            
-            # 拉取并启动容器
             docker compose pull json-parser
             docker compose up -d json-parser
             docker image prune -f
