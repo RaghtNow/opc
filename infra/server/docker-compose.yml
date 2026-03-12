@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   json-parser:
-    image: raghtnow/opc-json-parser:latest
+    image: kdqg/opc-json-parser:latest
     container_name: opc-json-parser
     ports:
       - "8081:80"
