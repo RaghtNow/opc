@@ -56,8 +56,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/opc
-            docker-compose pull json-parser
-            docker-compose up -d json-parser
+            docker compose pull json-parser
+            docker compose up -d json-parser
             docker image prune -f
 
       - name: Notify deployment
