@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 # 直接使用 vite build，跳过 vue-tsc 类型检查（避免兼容性问题）
