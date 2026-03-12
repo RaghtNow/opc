@@ -58,6 +58,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/opc
+            docker network create opc-network 2>/dev/null || echo "网络已存在"
             docker compose pull json-parser
             docker compose up -d json-parser
             docker image prune -f
