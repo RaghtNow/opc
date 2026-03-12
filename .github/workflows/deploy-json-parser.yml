@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE: raghtnow/opc-json-parser
+  DOCKER_IMAGE: kdqg/opc-json-parser
   DOCKER_PLATFORM: linux/amd64
 
 jobs:
