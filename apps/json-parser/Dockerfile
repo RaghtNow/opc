@@ -3,9 +3,9 @@ FROM node:20-alpine AS deps
 
 WORKDIR /app
 
-# 仅复制 package.json 以利用缓存层
+# 复制 package.json 和 package-lock.json 以利用缓存层
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # 多阶段构建 - 构建阶段
 FROM node:20-alpine AS builder
