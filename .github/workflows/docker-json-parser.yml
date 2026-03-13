@@ -14,7 +14,7 @@ on:
       - '.github/workflows/docker-json-parser.yml'
 
 env:
-  REGISTRY: registry.cn-hangzhou.aliyuncs.com
+  REGISTRY: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com
   NAMESPACE: kdqg
   REPOSITORY: opc-json-parser
   CONTEXT: apps/json-parser

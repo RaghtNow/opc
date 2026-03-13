@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: registry.cn-hangzhou.aliyuncs.com
+  REGISTRY: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com
   NAMESPACE: kdqg
   REPOSITORY: opc-json-parser
 
@@ -36,7 +36,7 @@ jobs:
             
             services:
               json-parser:
-                image: registry.cn-hangzhou.aliyuncs.com/kdqg/opc-json-parser:latest
+                image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-json-parser:latest
                 container_name: opc-json-parser
                 ports:
                   - "8081:80"
