@@ -210,3 +210,22 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+
+---
+
+## 多 Agent 代码修改规则（必须执行）
+
+**董事长明确规则（2026-03-13）：**
+
+| 类型 | 负责 Agent | 说明 |
+|------|-----------|------|
+| **业务代码** | Developer | 功能实现、业务逻辑、前端/后端代码 |
+| **CI/CD & 部署** | DevOps | GitHub Actions、Dockerfile、docker-compose、部署脚本 |
+| **基础配置** | DevOps | nginx 配置、环境变量、Secrets 管理 |
+
+**协作原则：**
+1. 各自负责自己的领域，不越界修改
+2. 如需修改对方领域代码，必须先 @ 对方请求协助
+3. 发生冲突时，由董事长裁决
+
+**此规则必须严格执行。**
