@@ -5,7 +5,7 @@ WORKDIR /app
 
 # 仅复制 package.json 以利用缓存层
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install
 
 # 多阶段构建 - 构建阶段
 FROM node:20-alpine AS builder
