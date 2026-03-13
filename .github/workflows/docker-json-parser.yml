@@ -2,7 +2,7 @@ name: Build & Push JSON Parser
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
     tags: ['v*']
     paths:
       - 'apps/json-parser/**'
@@ -44,8 +44,19 @@ jobs:
           username: ${{ secrets.ALIYUN_USERNAME }}
           password: ${{ secrets.ALIYUN_PASSWORD }}
 
-      - name: Extract metadata
-        id: meta
+      - name: Extract metadata (dev branch)
+        id: meta-dev
+        if: github.ref == 'refs/heads/dev'
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.REPOSITORY }}
+          tags: |
+            type=sha,prefix=dev-,suffix=,format=short
+            type=raw,value=dev-latest
+
+      - name: Extract metadata (main/master/tags)
+        id: meta-main
+        if: github.ref != 'refs/heads/dev'
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.REPOSITORY }}
@@ -62,8 +73,8 @@ jobs:
         with:
           context: ${{ env.CONTEXT }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-dev.outputs.tags || steps.meta-main.outputs.tags }}
+          labels: ${{ steps.meta-dev.outputs.labels || steps.meta-main.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
