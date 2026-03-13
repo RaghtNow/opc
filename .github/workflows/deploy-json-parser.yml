@@ -1,55 +1,26 @@
-name: Build and Deploy JSON Parser
+name: Deploy JSON Parser
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'apps/json-parser/**'
-      - '.github/workflows/deploy-json-parser.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'apps/json-parser/**'
-      - '.github/workflows/deploy-json-parser.yml'
+  workflow_run:
+    workflows: ["Build & Push JSON Parser"]
+    types:
+      - completed
+    branches: [main, master]
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE: kdqg/opc-json-parser
-  DOCKER_PLATFORM: linux/amd64
+  REGISTRY: registry.cn-hangzhou.aliyuncs.com
+  NAMESPACE: kdqg
+  REPOSITORY: opc-json-parser
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./apps/json-parser
-          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
-          tags: ${{ env.DOCKER_IMAGE }}:latest,${{ env.DOCKER_IMAGE }}:${{ github.sha }}
-          platforms: ${{ env.DOCKER_PLATFORM }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -58,6 +29,28 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/opc
+            
+            # 更新 docker-compose.yml
+            cat > docker-compose.yml << 'EOF'
+            version: '3.8'
+            
+            services:
+              json-parser:
+                image: registry.cn-hangzhou.aliyuncs.com/kdqg/opc-json-parser:latest
+                container_name: opc-json-parser
+                ports:
+                  - "8081:80"
+                restart: unless-stopped
+                labels:
+                  - "com.opc.service=json-parser"
+                networks:
+                  - opc-network
+            
+            networks:
+              opc-network:
+                external: true
+            EOF
+            
             docker network create opc-network 2>/dev/null || echo "网络已存在"
             docker compose pull json-parser
             docker compose up -d json-parser
@@ -66,3 +59,4 @@ jobs:
       - name: Notify deployment
         run: |
           echo "✅ Deployed to server successfully!"
+          echo "Image: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.REPOSITORY }}:latest"
