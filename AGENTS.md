@@ -215,17 +215,22 @@ This is a starting point. Add your own conventions, style, and rules as you figu
 
 ## 多 Agent 代码修改规则（必须执行）
 
-**董事长明确规则（2026-03-13）：**
+**项目角色分工（2026-05-30 更新）：**
 
-| 类型 | 负责 Agent | 说明 |
-|------|-----------|------|
-| **业务代码** | Developer | 功能实现、业务逻辑、前端/后端代码 |
-| **CI/CD & 部署** | DevOps | GitHub Actions、Dockerfile、docker-compose、部署脚本 |
-| **基础配置** | DevOps | nginx 配置、环境变量、Secrets 管理 |
+| 角色 | 负责范围 | 说明 |
+|------|---------|------|
+| **CEO** | 产品决策、需求管理、排期验收 | 与业务方沟通、确定优先级、拍板技术方案争议 |
+| **Developer** | 业务代码 | `apps/` 下所有应用代码、功能实现、单元测试 |
+| **DevOps** | CI/CD & 部署 | `.github/workflows/`、Dockerfile、docker-compose、部署脚本、nginx |
+| **共享** | 文档 | `docs/`、`README.md` 等文档共同维护 |
 
 **协作原则：**
-1. 各自负责自己的领域，不越界修改
-2. 如需修改对方领域代码，必须先 @ 对方请求协助
-3. 发生冲突时，由董事长裁决
+1. Developer 不碰 CI/CD、Dockerfile、部署脚本
+2. DevOps 不碰业务代码（`src/` 下的 Vue/TS 文件）
+3. CEO 做产品决策，技术方案争议时拍板
+4. 跨领域修改必须先沟通，不得擅自越界
+5. 冲突时由 CEO 裁决
+
+**详细流程见：** `docs/DEVELOPMENT_GUIDE.md`
 
 **此规则必须严格执行。**
