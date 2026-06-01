@@ -7,11 +7,15 @@ on:
     paths:
       - 'apps/json-editor-tool/**'
       - '.github/workflows/docker-json-editor.yml'
+      - '.github/workflows/deploy-json-editor*.yml'
+      - 'infra/**'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
     paths:
       - 'apps/json-editor-tool/**'
       - '.github/workflows/docker-json-editor.yml'
+      - '.github/workflows/deploy-json-editor*.yml'
+      - 'infra/**'
 
 env:
   REGISTRY: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com

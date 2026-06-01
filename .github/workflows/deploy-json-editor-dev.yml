@@ -1,11 +1,11 @@
-name: Deploy JSON Editor
+name: Deploy JSON Editor (Dev)
 
 on:
   workflow_run:
     workflows: ["Build & Push JSON Editor"]
     types:
       - completed
-    branches: [main, master]
+    branches: [dev]
   workflow_dispatch:
 
 env:
@@ -21,53 +21,57 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to server
+      - name: Deploy to dev server
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /opt/opc
+            mkdir -p /opt/opc-dev
+            cd /opt/opc-dev
 
-            # 更新 docker-compose.yml
-            cat > docker-compose.yml << 'EOF'
+            # 更新 docker-compose.dev.yml
+            cat > docker-compose.dev.yml << 'EOF'
             version: '3.8'
 
             services:
               json-parser:
-                image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-json-parser:latest
-                container_name: opc-json-parser
+                image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-json-parser:dev-latest
+                container_name: opc-json-parser-dev
                 ports:
-                  - "8081:80"
+                  - "8082:80"
                 restart: unless-stopped
                 labels:
                   - "com.opc.service=json-parser"
+                  - "com.opc.env=dev"
                 networks:
-                  - opc-network
+                  - opc-network-dev
 
               json-editor:
-                image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-json-editor:latest
-                container_name: opc-json-editor
+                image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-json-editor:dev-latest
+                container_name: opc-json-editor-dev
                 ports:
-                  - "8083:80"
+                  - "8084:80"
                 restart: unless-stopped
                 labels:
                   - "com.opc.service=json-editor"
+                  - "com.opc.env=dev"
                 networks:
-                  - opc-network
+                  - opc-network-dev
 
             networks:
-              opc-network:
+              opc-network-dev:
                 external: true
             EOF
 
-            docker network create opc-network 2>/dev/null || echo "网络已存在"
-            docker compose pull
-            docker compose up -d
+            docker network create opc-network-dev 2>/dev/null || echo "网络已存在"
+            docker compose -f docker-compose.dev.yml pull json-editor
+            docker compose -f docker-compose.dev.yml up -d json-editor
             docker image prune -f
 
       - name: Notify deployment
         run: |
-          echo "✅ Deployed to server successfully!"
-          echo "Image: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.REPOSITORY }}:latest"
+          echo "✅ Dev environment deployed successfully!"
+          echo "Image: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.REPOSITORY }}:dev-latest"
+          echo "Port: 8084"

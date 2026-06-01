@@ -7,11 +7,15 @@ on:
     paths:
       - 'apps/json-parser/**'
       - '.github/workflows/docker-json-parser.yml'
+      - '.github/workflows/deploy-json-parser*.yml'
+      - 'infra/**'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
     paths:
       - 'apps/json-parser/**'
       - '.github/workflows/docker-json-parser.yml'
+      - '.github/workflows/deploy-json-parser*.yml'
+      - 'infra/**'
 
 env:
   REGISTRY: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com
