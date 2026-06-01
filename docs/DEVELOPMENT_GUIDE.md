@@ -137,7 +137,28 @@ SSH 连服务器 → docker compose pull → up -d
 | 应用 | 构建工作流 | 部署工作流 |
 |------|-----------|-----------|
 | json-parser | `docker-json-parser.yml` | `deploy-json-parser.yml` |
-| json-editor-tool | `docker-json-editor.yml` | `deploy-json-editor.yml` |
+| json-editor | `docker-json-editor.yml` | `deploy-json-editor.yml` |
+
+---
+
+## 五、端口分配规则
+
+### 原则
+- **测试环境端口 = 生产环境端口 + 1**
+- **后续新应用端口分配必须间隔，不能连续**
+
+### 当前分配
+| 应用 | 生产环境 | 测试环境 |
+|------|---------|---------|
+| json-parser | 8081 | 8082 |
+| json-editor | 8083 | 8084 |
+| nginx | 80/443 | 8080 |
+
+### 新应用接入
+新增应用时按以下步骤分配端口：
+1. 查找当前最大生产端口
+2. 生产端口 = 最大生产端口 + 2（不连续）
+3. 测试端口 = 生产端口 + 1
 
 ---
 

@@ -12,6 +12,17 @@ services:
     networks:
       - opc-network
 
+  json-editor:
+    image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-json-editor:latest
+    container_name: opc-json-editor
+    ports:
+      - "8083:80"
+    restart: unless-stopped
+    labels:
+      - "com.opc.service=json-editor"
+    networks:
+      - opc-network
+
   nginx:
     image: nginx:alpine
     container_name: opc-nginx
@@ -25,6 +36,7 @@ services:
       - ./nginx/logs:/var/log/nginx
     depends_on:
       - json-parser
+      - json-editor
     restart: unless-stopped
     networks:
       - opc-network
