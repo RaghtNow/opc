@@ -98,8 +98,11 @@ git commit -m "feat: 添加 JSON 导出功能
 git push -u origin feature/你的功能名
 ```
 
+**红线：feature 分支的 PR 目标分支必须是 `dev`，禁止直接 PR 到 `main`。**
+
 ### 第5步：创建 Pull Request
 - PR 标题：`feat: 添加 JSON 导出功能`
+- 目标分支：**`dev`**
 - 描述：改了什么、为什么改、测试方式
 - Reviewer：CEO
 - 合并到 `main`
