@@ -17,7 +17,7 @@
 
 ## 2. 当前项目结构
 
-当前主要代码仍在 `/private/tmp/opc-dev` 下。
+当前主要代码已收敛到正常 Git 工作区 `/private/tmp/opc-push` 下。
 
 ### 2.1 教师端前端
 
@@ -56,13 +56,14 @@
 - `POST /api/exams/import`
 - `PATCH /api/exams/:id/scores/:scoreId`
 
-### 2.3 独立项目骨架
+### 2.3 当前结构取舍
 
-路径：`edu-insight`
+当前仓库不再保留根目录 `edu-insight/` 空骨架。
 
-当前性质：
-- 独立项目方向的结构草案。
-- 活跃开发代码仍在 `apps/edu-insight-teacher` 和 `apps/edu-insight-api`。
+原因：
+- 活跃代码已经在 `apps/edu-insight-teacher` 和 `apps/edu-insight-api`。
+- 根目录空骨架会和真实工程形成重复结构，增加理解和部署歧义。
+- 未来独立仓库结构保留在文档中，等正式迁移时再创建真实目录。
 
 ### 2.4 产品文档
 
@@ -258,8 +259,9 @@
 ### 5.6 工程与仓库
 
 当前问题：
-- `/private/tmp/opc-dev` 的 `.git` 目录不完整，普通 `git status` 无法识别。
-- 远端推送此前因认证不可用失败。
+- `/private/tmp/opc-dev` 的 `.git` 目录不完整，已停止作为开发工作区使用。
+- 当前正常 Git 工作区为 `/private/tmp/opc-push`。
+- 远端已切换为 SSH：`git@github.com:RaghtNow/opc.git`。
 - 前端 `3010` 当前返回 404，需重新确认实际前端服务端口或重启服务。
 
 ## 6. 后续开发计划
@@ -421,4 +423,3 @@
 - 系统完成后端校验与保存。
 - 老师查看并修改成绩明细。
 - 系统自动计算总分、排名和基础分析。
-
