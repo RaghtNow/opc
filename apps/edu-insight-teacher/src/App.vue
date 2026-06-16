@@ -110,9 +110,8 @@ const teacherForm = ref({
   id: '',
   subject: '',
   teacher: '',
+  mobile: '',
   classes: '',
-  accountStatus: 'pending' as 'bound' | 'pending',
-  permissionStatus: 'pending' as 'synced' | 'pending'
 })
 
 const policyForm = ref({
@@ -350,9 +349,8 @@ function openTeacherEditor(teacherId?: string) {
       id: target.id,
       subject: target.subject,
       teacher: target.teacher,
+      mobile: target.mobile,
       classes: target.classes,
-      accountStatus: target.accountStatus,
-      permissionStatus: target.permissionStatus
     }
     actionPanel.value = 'teacher-edit'
   } else {
@@ -360,9 +358,8 @@ function openTeacherEditor(teacherId?: string) {
       id: '',
       subject: '',
       teacher: '',
+      mobile: '',
       classes: '',
-      accountStatus: 'pending',
-      permissionStatus: 'pending'
     }
     actionPanel.value = 'teacher-add'
   }
@@ -372,9 +369,8 @@ async function saveTeacherForm() {
   const payload = {
     subject: teacherForm.value.subject,
     teacher: teacherForm.value.teacher,
+    mobile: teacherForm.value.mobile,
     classes: teacherForm.value.classes,
-    accountStatus: teacherForm.value.accountStatus,
-    permissionStatus: teacherForm.value.permissionStatus
   }
 
   try {
@@ -922,9 +918,10 @@ onMounted(async () => {
             </div>
 
             <div class="table-list">
-              <div class="table-row table-header five-cols">
+              <div class="table-row table-header six-cols">
                 <span>学科</span>
                 <span>任课老师</span>
+                <span>手机号</span>
                 <span>账号状态</span>
                 <span>权限状态</span>
                 <span>操作</span>
@@ -932,10 +929,11 @@ onMounted(async () => {
               <div
                 v-for="assignment in teachers"
                 :key="assignment.id"
-                class="table-row five-cols"
+                class="table-row six-cols"
               >
                 <span>{{ assignment.subject }}</span>
                 <span>{{ assignment.teacher }}</span>
+                <span>{{ assignment.mobile || '未维护' }}</span>
                 <span>{{ assignment.accountStatus === 'bound' ? '已绑定' : '待绑定' }}</span>
                 <span>{{ assignment.permissionStatus === 'synced' ? '已同步' : '待同步' }}</span>
                 <span class="row-actions">
@@ -1050,16 +1048,21 @@ onMounted(async () => {
               <div class="task-item">
                 <strong>{{ selectedTeacher.teacher }} / {{ selectedTeacher.subject }}</strong>
                 <p>{{ selectedTeacher.classes }}</p>
-                <span>{{ selectedTeacher.syncStatus }}</span>
+                <span>{{ selectedTeacher.mobile || '未维护手机号' }}</span>
               </div>
               <div class="task-item">
                 <strong>账号状态</strong>
-                <p>{{ selectedTeacher.accountStatus === 'bound' ? '已绑定教师账号' : '待绑定教师账号' }}</p>
-                <span>{{ selectedTeacher.permissionStatus === 'synced' ? '权限已同步' : '权限待同步' }}</span>
+                <p>{{ selectedTeacher.accountStatus === 'bound' ? selectedTeacher.accountId : '待绑定教师账号' }}</p>
+                <span>{{ selectedTeacher.accountBoundAt || '需先维护手机号并执行绑定' }}</span>
+              </div>
+              <div class="task-item">
+                <strong>权限状态</strong>
+                <p>{{ selectedTeacher.permissionStatus === 'synced' ? '权限已同步' : '权限待同步' }}</p>
+                <span>{{ selectedTeacher.permissionSyncedAt || selectedTeacher.syncStatus }}</span>
               </div>
               <div class="task-item">
                 <strong>建议动作</strong>
-                <p>先补账号绑定，再同步授权范围。</p>
+                <p>先维护手机号并绑定教师账号，再同步授权范围。</p>
                 <span>适用于跨班任课老师</span>
               </div>
             </div>
@@ -1640,23 +1643,18 @@ onMounted(async () => {
           <input v-model="teacherForm.teacher" type="text" />
         </label>
         <label>
+          <span>教师手机号</span>
+          <input v-model="teacherForm.mobile" type="text" />
+        </label>
+        <label>
           <span>授课范围</span>
           <input v-model="teacherForm.classes" type="text" />
         </label>
-        <label>
-          <span>账号状态</span>
-          <select v-model="teacherForm.accountStatus">
-            <option value="bound">已绑定</option>
-            <option value="pending">待绑定</option>
-          </select>
-        </label>
-        <label>
-          <span>权限状态</span>
-          <select v-model="teacherForm.permissionStatus">
-            <option value="synced">已同步</option>
-            <option value="pending">待同步</option>
-          </select>
-        </label>
+        <div class="task-item">
+          <strong>账号与权限状态</strong>
+          <p>账号绑定和权限同步由列表中的操作按钮执行，不能在编辑表单中手动改状态。</p>
+          <span>手机号是绑定教师账号的前置条件。</span>
+        </div>
         <div class="row-actions">
           <button type="button" class="solid-btn small" @click="saveTeacherForm">保存任课老师</button>
           <button type="button" class="ghost-btn small" @click="actionPanel = 'none'">取消</button>

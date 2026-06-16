@@ -26,13 +26,17 @@ type Student struct {
 }
 
 type TeacherAssignment struct {
-	ID               string `json:"id"`
-	Subject          string `json:"subject"`
-	Teacher          string `json:"teacher"`
-	Classes          string `json:"classes"`
-	SyncStatus       string `json:"syncStatus"`
-	AccountStatus    string `json:"accountStatus"`
-	PermissionStatus string `json:"permissionStatus"`
+	ID                 string `json:"id"`
+	Subject            string `json:"subject"`
+	Teacher            string `json:"teacher"`
+	Mobile             string `json:"mobile"`
+	Classes            string `json:"classes"`
+	SyncStatus         string `json:"syncStatus"`
+	AccountStatus      string `json:"accountStatus"`
+	AccountID          string `json:"accountId"`
+	AccountBoundAt     string `json:"accountBoundAt"`
+	PermissionStatus   string `json:"permissionStatus"`
+	PermissionSyncedAt string `json:"permissionSyncedAt"`
 }
 
 type Policy struct {
@@ -72,6 +76,7 @@ type SaveStudentRequest struct {
 type SaveTeacherRequest struct {
 	Subject          string `json:"subject"`
 	Teacher          string `json:"teacher"`
+	Mobile           string `json:"mobile"`
 	Classes          string `json:"classes"`
 	AccountStatus    string `json:"accountStatus"`
 	PermissionStatus string `json:"permissionStatus"`

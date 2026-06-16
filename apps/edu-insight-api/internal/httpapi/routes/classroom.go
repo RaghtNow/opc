@@ -113,7 +113,7 @@ func RegisterClassroomRoutes(router *gin.RouterGroup, service appclassroom.Servi
 	router.POST("/classes/current/teachers/:id/bind-account", func(c *gin.Context) {
 		workspace, ok, err := service.BindTeacherAccount(c.Param("id"))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "bind teacher account failed", "error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "bind teacher account failed", "error": err.Error()})
 			return
 		}
 		if !ok {

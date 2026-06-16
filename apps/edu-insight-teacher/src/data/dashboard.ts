@@ -52,10 +52,14 @@ export type TeacherAssignment = {
   id: string
   subject: string
   teacher: string
+  mobile: string
   classes: string
   syncStatus: string
   accountStatus: 'bound' | 'pending'
+  accountId: string
+  accountBoundAt: string
   permissionStatus: 'synced' | 'pending'
+  permissionSyncedAt: string
 }
 
 export type PolicyItem = {
@@ -281,37 +285,53 @@ export const teacherAssignments: TeacherAssignment[] = [
     id: 'teacher-chinese-zhang',
     subject: '语文',
     teacher: '张老师',
+    mobile: '13800001001',
     classes: '高二（3）班、高二（5）班',
     syncStatus: '已同步',
     accountStatus: 'bound',
-    permissionStatus: 'synced'
+    accountId: 'teacher-account-13800001001',
+    accountBoundAt: '2026-06-01 09:00',
+    permissionStatus: 'synced',
+    permissionSyncedAt: '2026-06-01 09:05'
   },
   {
     id: 'teacher-math-wang',
     subject: '数学',
     teacher: '王老师',
+    mobile: '13800001002',
     classes: '高二（3）班、高一（8）班',
     syncStatus: '已同步',
     accountStatus: 'bound',
-    permissionStatus: 'synced'
+    accountId: 'teacher-account-13800001002',
+    accountBoundAt: '2026-06-01 09:00',
+    permissionStatus: 'synced',
+    permissionSyncedAt: '2026-06-01 09:05'
   },
   {
     id: 'teacher-english-li',
     subject: '英语',
     teacher: '李老师',
+    mobile: '13800001003',
     classes: '高二（3）班',
     syncStatus: '班主任本人',
     accountStatus: 'bound',
-    permissionStatus: 'synced'
+    accountId: 'teacher-account-13800001003',
+    accountBoundAt: '2026-06-01 09:00',
+    permissionStatus: 'synced',
+    permissionSyncedAt: '2026-06-01 09:05'
   },
   {
     id: 'teacher-chemistry-zhao',
     subject: '化学',
     teacher: '赵老师',
+    mobile: '',
     classes: '高二（3）班教学班',
     syncStatus: '待补账号绑定',
     accountStatus: 'pending',
-    permissionStatus: 'pending'
+    accountId: '',
+    accountBoundAt: '',
+    permissionStatus: 'pending',
+    permissionSyncedAt: ''
   }
 ]
 

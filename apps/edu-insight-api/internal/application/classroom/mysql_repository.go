@@ -93,16 +93,21 @@ func (r *MySQLRepository) SaveStudent(classID string, student classroom.Student)
 func (r *MySQLRepository) SaveTeacher(classID string, teacher classroom.TeacherAssignment) error {
 	_, err := r.db.Exec(`
 		INSERT INTO classroom_teachers (
-			id, class_id, subject, teacher, classes, sync_status, account_status, permission_status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			id, class_id, subject, teacher, mobile, classes, sync_status, account_status,
+			account_id, account_bound_at, permission_status, permission_synced_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			subject = VALUES(subject),
 			teacher = VALUES(teacher),
+			mobile = VALUES(mobile),
 			classes = VALUES(classes),
 			sync_status = VALUES(sync_status),
 			account_status = VALUES(account_status),
-			permission_status = VALUES(permission_status)
-	`, teacher.ID, classID, teacher.Subject, teacher.Teacher, teacher.Classes, teacher.SyncStatus, teacher.AccountStatus, teacher.PermissionStatus)
+			account_id = VALUES(account_id),
+			account_bound_at = VALUES(account_bound_at),
+			permission_status = VALUES(permission_status),
+			permission_synced_at = VALUES(permission_synced_at)
+	`, teacher.ID, classID, teacher.Subject, teacher.Teacher, teacher.Mobile, teacher.Classes, teacher.SyncStatus, teacher.AccountStatus, teacher.AccountID, teacher.AccountBoundAt, teacher.PermissionStatus, teacher.PermissionSyncedAt)
 	return err
 }
 
@@ -165,9 +170,10 @@ func (r *MySQLRepository) SeedIfEmpty(workspace classroom.Workspace) error {
 	for _, teacher := range workspace.Teachers {
 		if _, err := tx.Exec(`
 			INSERT INTO classroom_teachers (
-				id, class_id, subject, teacher, classes, sync_status, account_status, permission_status
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`, teacher.ID, workspace.ClassID, teacher.Subject, teacher.Teacher, teacher.Classes, teacher.SyncStatus, teacher.AccountStatus, teacher.PermissionStatus); err != nil {
+				id, class_id, subject, teacher, mobile, classes, sync_status, account_status,
+				account_id, account_bound_at, permission_status, permission_synced_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, teacher.ID, workspace.ClassID, teacher.Subject, teacher.Teacher, teacher.Mobile, teacher.Classes, teacher.SyncStatus, teacher.AccountStatus, teacher.AccountID, teacher.AccountBoundAt, teacher.PermissionStatus, teacher.PermissionSyncedAt); err != nil {
 			return err
 		}
 	}
@@ -214,7 +220,8 @@ func (r *MySQLRepository) listStudents(classID string) ([]classroom.Student, err
 
 func (r *MySQLRepository) listTeachers(classID string) ([]classroom.TeacherAssignment, error) {
 	rows, err := r.db.Query(`
-		SELECT id, subject, teacher, classes, sync_status, account_status, permission_status
+		SELECT id, subject, teacher, mobile, classes, sync_status, account_status,
+		       account_id, account_bound_at, permission_status, permission_synced_at
 		FROM classroom_teachers
 		WHERE class_id = ?
 		ORDER BY subject, teacher
@@ -227,10 +234,10 @@ func (r *MySQLRepository) listTeachers(classID string) ([]classroom.TeacherAssig
 	teachers := []classroom.TeacherAssignment{}
 	for rows.Next() {
 		var teacher classroom.TeacherAssignment
-		if err := rows.Scan(&teacher.ID, &teacher.Subject, &teacher.Teacher, &teacher.Classes, &teacher.SyncStatus, &teacher.AccountStatus, &teacher.PermissionStatus); err != nil {
+		if err := rows.Scan(&teacher.ID, &teacher.Subject, &teacher.Teacher, &teacher.Mobile, &teacher.Classes, &teacher.SyncStatus, &teacher.AccountStatus, &teacher.AccountID, &teacher.AccountBoundAt, &teacher.PermissionStatus, &teacher.PermissionSyncedAt); err != nil {
 			return nil, err
 		}
-		teachers = append(teachers, teacher)
+		teachers = append(teachers, normalizeTeacherState(teacher))
 	}
 	return teachers, rows.Err()
 }

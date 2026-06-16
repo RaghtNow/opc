@@ -26,9 +26,8 @@ export type SaveStudentPayload = {
 export type SaveTeacherPayload = {
   subject: string
   teacher: string
+  mobile: string
   classes: string
-  accountStatus: 'bound' | 'pending'
-  permissionStatus: 'synced' | 'pending'
 }
 
 export type SavePolicyPayload = {

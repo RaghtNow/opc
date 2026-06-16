@@ -209,6 +209,7 @@ func (s *PersistentService) ImportTeachers(fileName string, content []byte) (cla
 		teacher := teacherFromRequest(id, classroom.SaveTeacherRequest{
 			Subject:          subject,
 			Teacher:          teacherName,
+			Mobile:           firstNonEmpty(row["手机号"], row["账号手机号"], row["教师手机号"]),
 			Classes:          defaultString(row["授课范围"], "待设置范围"),
 			AccountStatus:    accountStatus,
 			PermissionStatus: "pending",
@@ -223,7 +224,12 @@ func (s *PersistentService) ImportTeachers(fileName string, content []byte) (cla
 
 func (s *PersistentService) BindTeacherAccount(id string) (classroom.Workspace, bool, error) {
 	return s.updateTeacherState(id, func(teacher classroom.TeacherAssignment) (classroom.TeacherAssignment, error) {
+		if strings.TrimSpace(teacher.Mobile) == "" {
+			return teacher, fmt.Errorf("请先维护教师手机号，再绑定账号")
+		}
 		teacher.AccountStatus = "bound"
+		teacher.AccountID = accountIDFromMobile(teacher.Mobile)
+		teacher.AccountBoundAt = time.Now().Format("2006-01-02 15:04")
 		return teacher, nil
 	})
 }
@@ -234,6 +240,7 @@ func (s *PersistentService) SyncTeacherPermission(id string) (classroom.Workspac
 			return teacher, fmt.Errorf("请先绑定教师账号，再同步权限")
 		}
 		teacher.PermissionStatus = "synced"
+		teacher.PermissionSyncedAt = time.Now().Format("2006-01-02 15:04")
 		return teacher, nil
 	})
 }
@@ -434,6 +441,7 @@ func (s *MemoryService) ImportTeachers(fileName string, content []byte) (classro
 		teacher := teacherFromRequest(fmt.Sprintf("teacher-%d-%d", time.Now().UnixNano(), index), classroom.SaveTeacherRequest{
 			Subject:          subject,
 			Teacher:          teacherName,
+			Mobile:           firstNonEmpty(row["手机号"], row["账号手机号"], row["教师手机号"]),
 			Classes:          defaultString(row["授课范围"], "待设置范围"),
 			AccountStatus:    accountStatus,
 			PermissionStatus: "pending",
@@ -454,7 +462,12 @@ func (s *MemoryService) ImportTeachers(fileName string, content []byte) (classro
 
 func (s *MemoryService) BindTeacherAccount(id string) (classroom.Workspace, bool, error) {
 	return s.updateTeacherState(id, func(teacher classroom.TeacherAssignment) (classroom.TeacherAssignment, error) {
+		if strings.TrimSpace(teacher.Mobile) == "" {
+			return teacher, fmt.Errorf("请先维护教师手机号，再绑定账号")
+		}
 		teacher.AccountStatus = "bound"
+		teacher.AccountID = accountIDFromMobile(teacher.Mobile)
+		teacher.AccountBoundAt = time.Now().Format("2006-01-02 15:04")
 		return teacher, nil
 	})
 }
@@ -465,6 +478,7 @@ func (s *MemoryService) SyncTeacherPermission(id string) (classroom.Workspace, b
 			return teacher, fmt.Errorf("请先绑定教师账号，再同步权限")
 		}
 		teacher.PermissionStatus = "synced"
+		teacher.PermissionSyncedAt = time.Now().Format("2006-01-02 15:04")
 		return teacher, nil
 	})
 }
@@ -606,6 +620,7 @@ func teacherFromRequest(id string, req classroom.SaveTeacherRequest) classroom.T
 		ID:               id,
 		Subject:          req.Subject,
 		Teacher:          req.Teacher,
+		Mobile:           req.Mobile,
 		Classes:          req.Classes,
 		AccountStatus:    accountStatus,
 		PermissionStatus: permissionStatus,
@@ -615,6 +630,16 @@ func teacherFromRequest(id string, req classroom.SaveTeacherRequest) classroom.T
 func normalizeTeacherState(teacher classroom.TeacherAssignment) classroom.TeacherAssignment {
 	if teacher.AccountStatus == "" {
 		teacher.AccountStatus = "pending"
+	}
+	if strings.TrimSpace(teacher.Mobile) == "" || (teacher.AccountStatus == "bound" && teacher.AccountID == "") {
+		teacher.AccountStatus = "pending"
+		teacher.AccountID = ""
+		teacher.AccountBoundAt = ""
+		teacher.PermissionStatus = "pending"
+		teacher.PermissionSyncedAt = ""
+	}
+	if teacher.AccountStatus == "bound" && teacher.AccountID == "" && strings.TrimSpace(teacher.Mobile) != "" {
+		teacher.AccountID = accountIDFromMobile(teacher.Mobile)
 	}
 	if teacher.PermissionStatus == "" {
 		teacher.PermissionStatus = "pending"
@@ -691,6 +716,11 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func accountIDFromMobile(mobile string) string {
+	cleaned := strings.NewReplacer(" ", "", "-", "", "*", "x").Replace(mobile)
+	return "teacher-account-" + cleaned
+}
+
 func defaultWorkspace() classroom.Workspace {
 	return classroom.Workspace{
 		ClassID:   CurrentClassID,
@@ -715,9 +745,9 @@ func defaultWorkspace() classroom.Workspace {
 			{ID: "student-g230329", StudentNo: "G230329", Name: "赵博文", Gender: "男", Combination: "物化生", ElectiveSubjects: []string{"物理", "化学", "生物"}, ParentMobile: "136****9913", Status: "选科待确认", ParentStatus: "已绑定", SelectionStatus: "待确认", ProfileStatus: "missing_selection"},
 		},
 		Teachers: []classroom.TeacherAssignment{
-			{ID: "teacher-chinese-zhang", Subject: "语文", Teacher: "张老师", Classes: "高二（3）班、高二（5）班", SyncStatus: "已同步", AccountStatus: "bound", PermissionStatus: "synced"},
-			{ID: "teacher-math-wang", Subject: "数学", Teacher: "王老师", Classes: "高二（3）班、高一（8）班", SyncStatus: "已同步", AccountStatus: "bound", PermissionStatus: "synced"},
-			{ID: "teacher-english-li", Subject: "英语", Teacher: "李老师", Classes: "高二（3）班", SyncStatus: "班主任本人", AccountStatus: "bound", PermissionStatus: "synced"},
+			{ID: "teacher-chinese-zhang", Subject: "语文", Teacher: "张老师", Mobile: "13800001001", Classes: "高二（3）班、高二（5）班", SyncStatus: "已同步", AccountStatus: "bound", AccountID: "teacher-account-13800001001", AccountBoundAt: "2026-06-01 09:00", PermissionStatus: "synced", PermissionSyncedAt: "2026-06-01 09:05"},
+			{ID: "teacher-math-wang", Subject: "数学", Teacher: "王老师", Mobile: "13800001002", Classes: "高二（3）班、高一（8）班", SyncStatus: "已同步", AccountStatus: "bound", AccountID: "teacher-account-13800001002", AccountBoundAt: "2026-06-01 09:00", PermissionStatus: "synced", PermissionSyncedAt: "2026-06-01 09:05"},
+			{ID: "teacher-english-li", Subject: "英语", Teacher: "李老师", Mobile: "13800001003", Classes: "高二（3）班", SyncStatus: "班主任本人", AccountStatus: "bound", AccountID: "teacher-account-13800001003", AccountBoundAt: "2026-06-01 09:00", PermissionStatus: "synced", PermissionSyncedAt: "2026-06-01 09:05"},
 			{ID: "teacher-chemistry-zhao", Subject: "化学", Teacher: "赵老师", Classes: "高二（3）班教学班", SyncStatus: "待补账号绑定", AccountStatus: "pending", PermissionStatus: "pending"},
 		},
 		Policies: []classroom.Policy{
