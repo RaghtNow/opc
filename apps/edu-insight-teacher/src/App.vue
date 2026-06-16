@@ -2,8 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import {
   alertItems,
-  classMembers,
   classBaseFields,
+  classMembers,
   cohortInsights,
   currentClassStage,
   displayPolicies,
@@ -23,6 +23,15 @@ import {
   teacherAssignments,
   workContexts
 } from './data/dashboard'
+import {
+  createStudent,
+  createTeacher,
+  fetchClassroomWorkspace,
+  updatePolicy,
+  updateStudent,
+  updateTeacher,
+  type ClassroomWorkspace
+} from './api/classroom'
 import { fetchExamDetail, fetchExams, importExam, updateExamScore } from './api/score'
 import { parseAndValidateCsv } from './utils/csvImport'
 
@@ -32,7 +41,7 @@ const subjectScopeMode = ref<'single' | 'overall'>('single')
 const activeSubjectClassId = ref(subjectScopeClasses[0].id)
 const selectedExamId = ref(examRecords[0].id)
 const classPanelMode = ref<'student' | 'teacher' | 'policy'>('student')
-const selectedStudentId = ref(classMembers[0].id)
+const selectedStudentId = ref('')
 const selectedTeacherId = ref(teacherAssignments[0].id)
 const selectedPolicyId = ref(displayPolicies[0].id)
 const actionPanel = ref<
@@ -51,11 +60,16 @@ const actionPanel = ref<
 const students = ref(structuredClone(classMembers))
 const teachers = ref(structuredClone(teacherAssignments))
 const policies = ref(structuredClone(displayPolicies))
+const classBaseFieldRows = ref(structuredClone(classBaseFields))
+const rosterInsightRows = ref(structuredClone(rosterInsights))
+const classStage = ref(structuredClone(currentClassStage))
 const exams = ref(structuredClone(examRecords))
 const issues = ref(structuredClone(importIssues))
 const scoreRows = ref(structuredClone(scoreEntries))
 const scoreLoading = ref(false)
 const scoreError = ref('')
+const classroomLoading = ref(false)
+const classroomError = ref('')
 
 const studentForm = ref({
   id: '',
@@ -133,7 +147,7 @@ const activeSubjectClass = computed(() => {
   return subjectScopeClasses.find((item) => item.id === activeSubjectClassId.value) ?? subjectScopeClasses[0]
 })
 
-const activeSelectionScenario = computed(() => currentClassStage)
+const activeSelectionScenario = computed(() => classStage.value)
 
 const selectedStudent = computed(() => {
   return students.value.find((item) => item.id === selectedStudentId.value) ?? students.value[0]
@@ -169,6 +183,37 @@ const importBatchMetricsView = computed(() => {
 
 const knownStudentIds = computed(() => students.value.map((item) => item.studentNo))
 const knownStudentNames = computed(() => students.value.map((item) => item.name))
+
+function applyClassroomWorkspace(workspace: ClassroomWorkspace) {
+  classBaseFieldRows.value = workspace.baseFields
+  rosterInsightRows.value = workspace.rosterInsights
+  classStage.value = workspace.stage
+  students.value = workspace.students
+  teachers.value = workspace.teachers
+  policies.value = workspace.policies
+
+  if (students.value.length > 0 && !students.value.find((item) => item.id === selectedStudentId.value)) {
+    selectedStudentId.value = students.value[0].id
+  }
+  if (teachers.value.length > 0 && !teachers.value.find((item) => item.id === selectedTeacherId.value)) {
+    selectedTeacherId.value = teachers.value[0].id
+  }
+  if (policies.value.length > 0 && !policies.value.find((item) => item.id === selectedPolicyId.value)) {
+    selectedPolicyId.value = policies.value[0].id
+  }
+}
+
+async function loadClassroomWorkspace() {
+  try {
+    classroomLoading.value = true
+    classroomError.value = ''
+    applyClassroomWorkspace(await fetchClassroomWorkspace())
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '获取班级与师生数据失败'
+  } finally {
+    classroomLoading.value = false
+  }
+}
 
 function openScoreImport() {
   activeNav.value = 'scores'
@@ -240,55 +285,32 @@ function openStudentEditor(studentId?: string) {
   }
 }
 
-function saveStudentForm() {
-  const status =
-    studentForm.value.parentStatus !== '已绑定'
-      ? '待补家长'
-      : studentForm.value.selectionStatus !== '已登记'
-        ? '选科待确认'
-        : '已完整'
-  const profileStatus =
-    studentForm.value.parentStatus !== '已绑定'
-      ? 'missing_parent'
-      : studentForm.value.selectionStatus !== '已登记'
-        ? 'missing_selection'
-        : 'ready'
-
-  if (studentForm.value.id) {
-    const target = students.value.find((item) => item.id === studentForm.value.id)
-    if (!target) return
-    Object.assign(target, {
-      studentNo: studentForm.value.studentNo,
-      name: studentForm.value.name,
-      gender: studentForm.value.gender,
-      combination: studentForm.value.combination,
-      parentMobile: studentForm.value.parentMobile,
-      parentStatus: studentForm.value.parentStatus,
-      selectionStatus: studentForm.value.selectionStatus,
-      status,
-      profileStatus
-    })
-    selectedStudentId.value = target.id
-  } else {
-    const newId = `student-${Date.now()}`
-    students.value.unshift({
-      id: newId,
-      studentNo: studentForm.value.studentNo || `NEW${students.value.length + 1}`,
-      name: studentForm.value.name || '新学生',
-      gender: studentForm.value.gender,
-      combination: studentForm.value.combination || '待分配',
-      electiveSubjects: studentForm.value.combination ? studentForm.value.combination.split('') : [],
-      parentMobile: studentForm.value.parentMobile || '待补充',
-      status,
-      parentStatus: studentForm.value.parentStatus,
-      selectionStatus: studentForm.value.selectionStatus,
-      profileStatus
-    })
-    selectedStudentId.value = newId
+async function saveStudentForm() {
+  const payload = {
+    studentNo: studentForm.value.studentNo,
+    name: studentForm.value.name,
+    gender: studentForm.value.gender,
+    combination: studentForm.value.combination,
+    parentMobile: studentForm.value.parentMobile,
+    parentStatus: studentForm.value.parentStatus,
+    selectionStatus: studentForm.value.selectionStatus
   }
 
-  classPanelMode.value = 'student'
-  actionPanel.value = 'none'
+  try {
+    classroomError.value = ''
+    const workspace = studentForm.value.id
+      ? await updateStudent(studentForm.value.id, payload)
+      : await createStudent(payload)
+    applyClassroomWorkspace(workspace)
+    const selected = studentForm.value.id
+      ? studentForm.value.id
+      : workspace.students.find((item) => item.studentNo === payload.studentNo && item.name === payload.name)?.id
+    if (selected) selectedStudentId.value = selected
+    classPanelMode.value = 'student'
+    actionPanel.value = 'none'
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '保存学生失败'
+  }
 }
 
 function openTeacherEditor(teacherId?: string) {
@@ -318,42 +340,30 @@ function openTeacherEditor(teacherId?: string) {
   }
 }
 
-function saveTeacherForm() {
-  const syncStatus =
-    teacherForm.value.accountStatus === 'bound' && teacherForm.value.permissionStatus === 'synced'
-      ? '已同步'
-      : teacherForm.value.accountStatus === 'bound'
-        ? '待同步权限'
-        : '待补账号绑定'
-
-  if (teacherForm.value.id) {
-    const target = teachers.value.find((item) => item.id === teacherForm.value.id)
-    if (!target) return
-    Object.assign(target, {
-      subject: teacherForm.value.subject,
-      teacher: teacherForm.value.teacher,
-      classes: teacherForm.value.classes,
-      accountStatus: teacherForm.value.accountStatus,
-      permissionStatus: teacherForm.value.permissionStatus,
-      syncStatus
-    })
-    selectedTeacherId.value = target.id
-  } else {
-    const newId = `teacher-${Date.now()}`
-    teachers.value.unshift({
-      id: newId,
-      subject: teacherForm.value.subject || '新学科',
-      teacher: teacherForm.value.teacher || '新老师',
-      classes: teacherForm.value.classes || '待设置范围',
-      syncStatus,
-      accountStatus: teacherForm.value.accountStatus,
-      permissionStatus: teacherForm.value.permissionStatus
-    })
-    selectedTeacherId.value = newId
+async function saveTeacherForm() {
+  const payload = {
+    subject: teacherForm.value.subject,
+    teacher: teacherForm.value.teacher,
+    classes: teacherForm.value.classes,
+    accountStatus: teacherForm.value.accountStatus,
+    permissionStatus: teacherForm.value.permissionStatus
   }
 
-  classPanelMode.value = 'teacher'
-  actionPanel.value = 'none'
+  try {
+    classroomError.value = ''
+    const workspace = teacherForm.value.id
+      ? await updateTeacher(teacherForm.value.id, payload)
+      : await createTeacher(payload)
+    applyClassroomWorkspace(workspace)
+    const selected = teacherForm.value.id
+      ? teacherForm.value.id
+      : workspace.teachers.find((item) => item.subject === payload.subject && item.teacher === payload.teacher)?.id
+    if (selected) selectedTeacherId.value = selected
+    classPanelMode.value = 'teacher'
+    actionPanel.value = 'none'
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '保存任课老师失败'
+  }
 }
 
 function openPolicyEditor(policyId?: string) {
@@ -369,14 +379,19 @@ function openPolicyEditor(policyId?: string) {
   actionPanel.value = 'policy-edit'
 }
 
-function savePolicyForm() {
-  const target = policies.value.find((item) => item.id === policyForm.value.id)
-  if (!target) return
-  target.value = policyForm.value.value
-  target.note = policyForm.value.note
-  selectedPolicyId.value = target.id
-  classPanelMode.value = 'policy'
-  actionPanel.value = 'none'
+async function savePolicyForm() {
+  try {
+    classroomError.value = ''
+    applyClassroomWorkspace(await updatePolicy(policyForm.value.id, {
+      value: policyForm.value.value,
+      note: policyForm.value.note
+    }))
+    selectedPolicyId.value = policyForm.value.id
+    classPanelMode.value = 'policy'
+    actionPanel.value = 'none'
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '保存策略失败'
+  }
 }
 
 function saveScoreUpload() {
@@ -511,6 +526,7 @@ async function loadExamDetail(examID: string) {
 }
 
 onMounted(async () => {
+  await loadClassroomWorkspace()
   await loadExamList()
   if (selectedExamId.value) {
     await loadExamDetail(selectedExamId.value)
@@ -629,6 +645,18 @@ onMounted(async () => {
 
       <template v-else-if="activeNav === 'classes'">
         <section class="content-grid">
+          <article v-if="classroomError" class="panel panel-wide">
+            <div class="task-item">
+              <strong>班级与师生接口异常</strong>
+              <p>{{ classroomError }}</p>
+              <span>请确认 Go 后端已运行在 127.0.0.1:8088</span>
+            </div>
+          </article>
+
+          <article v-if="classroomLoading" class="panel panel-wide">
+            <div class="status-inline">正在加载班级、学生、任课老师和展示策略...</div>
+          </article>
+
           <article class="panel panel-wide">
             <div class="panel-head">
               <div>
@@ -651,7 +679,7 @@ onMounted(async () => {
               </div>
 
             <div class="base-grid">
-              <div v-for="field in classBaseFields" :key="field.label" class="base-item">
+              <div v-for="field in classBaseFieldRows" :key="field.label" class="base-item">
                 <span>{{ field.label }}</span>
                 <strong>{{ field.value }}</strong>
               </div>
@@ -662,7 +690,7 @@ onMounted(async () => {
             </div>
 
             <div class="insight-grid compact-insights">
-              <div v-for="item in rosterInsights" :key="item.title" class="insight-card">
+              <div v-for="item in rosterInsightRows" :key="item.title" class="insight-card">
                 <strong>{{ item.title }}</strong>
                 <div class="insight-count">{{ item.count }}</div>
                 <p>{{ item.detail }}</p>
@@ -677,7 +705,7 @@ onMounted(async () => {
                 <span>选科组合</span>
                 <span>家长状态</span>
               </div>
-              <div v-for="student in classMembers" :key="student.studentNo" class="table-row five-cols">
+              <div v-for="student in students" :key="student.studentNo" class="table-row five-cols">
                 <span>{{ student.studentNo }}</span>
                 <span>{{ student.name }}</span>
                 <span>{{ student.gender }}</span>
@@ -709,7 +737,7 @@ onMounted(async () => {
                 <span>操作</span>
               </div>
               <div
-                v-for="student in classMembers"
+                v-for="student in students"
                 :key="student.id"
                 class="table-row six-cols"
               >
@@ -747,7 +775,7 @@ onMounted(async () => {
                 <span>操作</span>
               </div>
               <div
-                v-for="assignment in teacherAssignments"
+                v-for="assignment in teachers"
                 :key="assignment.id"
                 class="table-row five-cols"
               >
@@ -800,7 +828,7 @@ onMounted(async () => {
             </div>
 
             <div class="task-list">
-              <div v-for="policy in displayPolicies" :key="policy.id" class="task-item">
+              <div v-for="policy in policies" :key="policy.id" class="task-item">
                 <strong>{{ policy.title }}</strong>
                 <p>{{ policy.note }}</p>
                 <span>{{ policy.value }}</span>
