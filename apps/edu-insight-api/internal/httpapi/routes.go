@@ -6,12 +6,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	appclassroom "github.com/RaghtNow/opc/apps/edu-insight-api/internal/application/classroom"
+	appinsight "github.com/RaghtNow/opc/apps/edu-insight-api/internal/application/insight"
 	appscore "github.com/RaghtNow/opc/apps/edu-insight-api/internal/application/score"
 	"github.com/RaghtNow/opc/apps/edu-insight-api/internal/config"
 	"github.com/RaghtNow/opc/apps/edu-insight-api/internal/httpapi/routes"
 )
 
-func RegisterRoutes(engine *gin.Engine, cfg config.Config, classroomService appclassroom.Service, scoreService appscore.Service) {
+func RegisterRoutes(engine *gin.Engine, cfg config.Config, classroomService appclassroom.Service, scoreService appscore.Service, insightService appinsight.Service) {
 	engine.Use(corsMiddleware())
 
 	engine.GET("/health", func(c *gin.Context) {
@@ -26,6 +27,7 @@ func RegisterRoutes(engine *gin.Engine, cfg config.Config, classroomService appc
 		routes.RegisterMetaRoutes(api, cfg)
 		routes.RegisterClassroomRoutes(api, classroomService)
 		routes.RegisterScoreRoutes(api, scoreService, classroomService)
+		routes.RegisterInsightRoutes(api, insightService)
 	}
 }
 

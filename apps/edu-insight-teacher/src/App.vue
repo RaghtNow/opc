@@ -37,6 +37,7 @@ import {
   type ClassroomWorkspace
 } from './api/classroom'
 import { fetchExamDetail, fetchExams, importExam, updateExamScore } from './api/score'
+import { fetchInsightDashboard, publishLatestExam } from './api/insight'
 import { parseAndValidateCsv } from './utils/csvImport'
 
 const activeNav = ref('overview')
@@ -75,6 +76,18 @@ const scoreError = ref('')
 const classroomLoading = ref(false)
 const classroomError = ref('')
 const classroomActionMessage = ref('')
+const insightLoading = ref(false)
+const insightError = ref('')
+const insightActionMessage = ref('')
+const summaryMetricRows = ref(structuredClone(summaryMetrics))
+const studentTrendRows = ref(structuredClone(studentTrends))
+const cohortInsightRows = ref(structuredClone(cohortInsights))
+const alertRows = ref(structuredClone(alertItems))
+const syncAudienceRows = ref(structuredClone(syncAudienceCards))
+const syncRecordRows = ref(structuredClone(syncRecords))
+const latestInsightExamName = ref('')
+const canPublishLatestExam = ref(false)
+const publishBlockers = ref<string[]>([])
 const studentImportInput = ref<HTMLInputElement | null>(null)
 const teacherImportInput = ref<HTMLInputElement | null>(null)
 const studentImportFile = ref<File | null>(null)
@@ -617,12 +630,54 @@ async function loadExamDetail(examID: string) {
   }
 }
 
+async function loadInsightDashboard() {
+  try {
+    insightLoading.value = true
+    insightError.value = ''
+    const dashboard = await fetchInsightDashboard()
+    summaryMetricRows.value = dashboard.summaryMetrics
+    studentTrendRows.value = dashboard.studentTrends
+    cohortInsightRows.value = dashboard.cohortInsights
+    alertRows.value = dashboard.alertItems
+    syncAudienceRows.value = dashboard.syncAudienceCards
+    syncRecordRows.value = dashboard.syncRecords
+    latestInsightExamName.value = dashboard.latestExamName
+    canPublishLatestExam.value = dashboard.canPublish
+    publishBlockers.value = dashboard.publishBlockers
+  } catch (error) {
+    insightError.value = error instanceof Error ? error.message : '获取分析与同步数据失败'
+  } finally {
+    insightLoading.value = false
+  }
+}
+
+async function publishLatestExamSync() {
+  try {
+    insightError.value = ''
+    insightActionMessage.value = ''
+    const dashboard = await publishLatestExam()
+    summaryMetricRows.value = dashboard.summaryMetrics
+    studentTrendRows.value = dashboard.studentTrends
+    cohortInsightRows.value = dashboard.cohortInsights
+    alertRows.value = dashboard.alertItems
+    syncAudienceRows.value = dashboard.syncAudienceCards
+    syncRecordRows.value = dashboard.syncRecords
+    latestInsightExamName.value = dashboard.latestExamName
+    canPublishLatestExam.value = dashboard.canPublish
+    publishBlockers.value = dashboard.publishBlockers
+    insightActionMessage.value = '已创建最近考试的家长、学生和任课老师同步任务。'
+  } catch (error) {
+    insightError.value = error instanceof Error ? error.message : '发布同步任务失败'
+  }
+}
+
 onMounted(async () => {
   await loadClassroomWorkspace()
   await loadExamList()
   if (selectedExamId.value) {
     await loadExamDetail(selectedExamId.value)
   }
+  await loadInsightDashboard()
 })
 </script>
 
@@ -686,7 +741,7 @@ onMounted(async () => {
 
       <template v-if="activeNav === 'overview'">
         <section class="metrics-grid">
-          <article v-for="metric in summaryMetrics" :key="metric.label" class="metric-card">
+          <article v-for="metric in summaryMetricRows" :key="metric.label" class="metric-card">
             <p>{{ metric.label }}</p>
             <strong>{{ metric.value }}</strong>
             <span>{{ metric.note }}</span>
@@ -703,7 +758,7 @@ onMounted(async () => {
             </div>
 
             <div class="trend-grid">
-              <div v-for="student in studentTrends" :key="student.name" class="trend-card">
+              <div v-for="student in studentTrendRows" :key="student.name" class="trend-card">
                 <strong>{{ student.name }}</strong>
                 <div class="trend-score">{{ student.totalScore }}</div>
                 <div class="trend-meta">
@@ -723,7 +778,7 @@ onMounted(async () => {
             </div>
 
             <div class="alert-list">
-              <div v-for="alert in alertItems.slice(0, 3)" :key="`${alert.student}-${alert.subject}`" class="alert-item">
+              <div v-for="alert in alertRows.slice(0, 3)" :key="`${alert.student}-${alert.subject}`" class="alert-item">
                 <div class="alert-top">
                   <strong>{{ alert.student }}</strong>
                   <span>{{ alert.level }}</span>
@@ -1228,8 +1283,20 @@ onMounted(async () => {
       </template>
 
       <template v-else-if="activeNav === 'analysis'">
+        <article v-if="insightError" class="panel panel-wide">
+          <div class="task-item">
+            <strong>分析与同步接口异常</strong>
+            <p>{{ insightError }}</p>
+            <span>请确认 Go 后端已运行在 127.0.0.1:8088</span>
+          </div>
+        </article>
+
+        <article v-if="insightLoading" class="panel panel-wide">
+          <div class="status-inline">正在基于真实考试成绩生成分析...</div>
+        </article>
+
         <section class="metrics-grid">
-          <article v-for="metric in summaryMetrics" :key="metric.label" class="metric-card">
+          <article v-for="metric in summaryMetricRows" :key="metric.label" class="metric-card">
             <p>{{ metric.label }}</p>
             <strong>{{ metric.value }}</strong>
             <span>{{ metric.note }}</span>
@@ -1244,17 +1311,17 @@ onMounted(async () => {
                 <h3>
                   {{
                     isSubjectTeacherView && subjectScopeMode === 'overall'
-                      ? '任课整体分析样例'
+                      ? '任课整体分析'
                       : isSubjectTeacherView
-                        ? `${activeSubjectClass.label} 单班分析样例`
-                        : '进退步与分层样例'
+                        ? `${activeSubjectClass.label} 单班分析`
+                        : '进退步与分层'
                   }}
                 </h3>
               </div>
             </div>
 
             <div class="trend-grid">
-              <div v-for="student in studentTrends" :key="student.name" class="trend-card">
+              <div v-for="student in studentTrendRows" :key="student.name" class="trend-card">
                 <strong>{{ student.name }}</strong>
                 <div class="trend-score">{{ student.totalScore }}</div>
                 <div class="trend-meta">
@@ -1269,12 +1336,12 @@ onMounted(async () => {
             <div class="panel-head">
               <div>
                 <p class="panel-label">分层洞察</p>
-                <h3>班级人群结构样例</h3>
+                <h3>班级人群结构</h3>
               </div>
             </div>
 
             <div class="insight-grid">
-              <div v-for="item in cohortInsights" :key="item.title" class="insight-card">
+              <div v-for="item in cohortInsightRows" :key="item.title" class="insight-card">
                 <strong>{{ item.title }}</strong>
                 <div class="insight-count">{{ item.students }}</div>
                 <p>{{ item.insight }}</p>
@@ -1291,7 +1358,7 @@ onMounted(async () => {
             </div>
 
             <div class="alert-list">
-              <div v-for="alert in alertItems.slice(0, 3)" :key="`${alert.student}-${alert.subject}`" class="alert-item">
+              <div v-for="alert in alertRows.slice(0, 3)" :key="`${alert.student}-${alert.subject}`" class="alert-item">
                 <div class="alert-top">
                   <strong>{{ alert.student }}</strong>
                   <span>{{ alert.level }}</span>
@@ -1386,6 +1453,18 @@ onMounted(async () => {
 
       <template v-else-if="activeNav === 'sync'">
         <section class="content-grid">
+          <article v-if="insightError" class="panel panel-wide">
+            <div class="task-item">
+              <strong>同步接口异常</strong>
+              <p>{{ insightError }}</p>
+              <span>请确认 Go 后端已运行在 127.0.0.1:8088</span>
+            </div>
+          </article>
+
+          <article v-if="insightActionMessage" class="panel panel-wide">
+            <div class="status-inline">{{ insightActionMessage }}</div>
+          </article>
+
           <article class="panel panel-wide">
             <div class="panel-head">
               <div>
@@ -1395,7 +1474,7 @@ onMounted(async () => {
             </div>
 
             <div class="insight-grid">
-              <div v-for="item in syncAudienceCards" :key="item.audience" class="insight-card">
+              <div v-for="item in syncAudienceRows" :key="item.audience" class="insight-card">
                 <strong>{{ item.audience }}</strong>
                 <div class="insight-count">{{ item.readiness }}</div>
                 <p>{{ item.note }}</p>
@@ -1407,8 +1486,22 @@ onMounted(async () => {
             <div class="panel-head">
               <div>
                 <p class="panel-label">同步记录</p>
-                <h3>最近一次月考同步任务</h3>
+                <h3>{{ latestInsightExamName }} 同步任务</h3>
               </div>
+              <button
+                type="button"
+                class="solid-btn small"
+                :disabled="!canPublishLatestExam"
+                @click="publishLatestExamSync"
+              >
+                发布最近考试
+              </button>
+            </div>
+
+            <div v-if="publishBlockers.length" class="task-item">
+              <strong>发布前置条件</strong>
+              <p>{{ publishBlockers.join('；') }}</p>
+              <span>补齐后才能创建同步任务</span>
             </div>
 
             <div class="table-list">
@@ -1418,7 +1511,7 @@ onMounted(async () => {
                 <span>状态</span>
                 <span>时间</span>
               </div>
-              <div v-for="record in syncRecords" :key="`${record.target}-${record.time}`" class="table-row four-cols">
+              <div v-for="record in syncRecordRows" :key="`${record.target}-${record.time}`" class="table-row four-cols">
                 <span>{{ record.target }}</span>
                 <span>{{ record.channel }}</span>
                 <span>{{ record.status }}</span>
