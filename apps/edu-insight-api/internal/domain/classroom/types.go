@@ -81,3 +81,10 @@ type SavePolicyRequest struct {
 	Value string `json:"value"`
 	Note  string `json:"note"`
 }
+
+type ImportSummary struct {
+	Created int      `json:"created"`
+	Updated int      `json:"updated"`
+	Skipped int      `json:"skipped"`
+	Errors  []string `json:"errors"`
+}

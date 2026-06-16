@@ -24,9 +24,13 @@ import {
   workContexts
 } from './data/dashboard'
 import {
+  bindTeacherAccount,
   createStudent,
   createTeacher,
   fetchClassroomWorkspace,
+  importStudents,
+  importTeachers,
+  syncTeacherPermission,
   updatePolicy,
   updateStudent,
   updateTeacher,
@@ -70,6 +74,13 @@ const scoreLoading = ref(false)
 const scoreError = ref('')
 const classroomLoading = ref(false)
 const classroomError = ref('')
+const classroomActionMessage = ref('')
+const studentImportInput = ref<HTMLInputElement | null>(null)
+const teacherImportInput = ref<HTMLInputElement | null>(null)
+const studentImportFile = ref<File | null>(null)
+const teacherImportFile = ref<File | null>(null)
+const studentImportFileName = ref('')
+const teacherImportFileName = ref('')
 
 const studentForm = ref({
   id: '',
@@ -370,6 +381,83 @@ async function saveTeacherForm() {
   }
 }
 
+async function bindTeacher(teacherId: string) {
+  try {
+    classroomError.value = ''
+    classroomActionMessage.value = ''
+    applyClassroomWorkspace(await bindTeacherAccount(teacherId))
+    selectedTeacherId.value = teacherId
+    classPanelMode.value = 'teacher'
+    classroomActionMessage.value = '教师账号已绑定，可以继续同步权限。'
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '绑定教师账号失败'
+  }
+}
+
+async function syncTeacher(teacherId: string) {
+  const target = teachers.value.find((item) => item.id === teacherId)
+  if (target?.accountStatus !== 'bound') {
+    classroomActionMessage.value = '请先绑定教师账号，再同步权限。'
+    return
+  }
+  try {
+    classroomError.value = ''
+    classroomActionMessage.value = ''
+    applyClassroomWorkspace(await syncTeacherPermission(teacherId))
+    selectedTeacherId.value = teacherId
+    classPanelMode.value = 'teacher'
+    classroomActionMessage.value = '权限已同步，任课老师可查看授权范围内数据。'
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '同步教师权限失败'
+  }
+}
+
+function handleStudentImportFileChange(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  studentImportFile.value = file
+  studentImportFileName.value = file.name
+}
+
+function handleTeacherImportFileChange(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  teacherImportFile.value = file
+  teacherImportFileName.value = file.name
+}
+
+async function submitStudentImport() {
+  if (!studentImportFile.value) return
+  try {
+    classroomError.value = ''
+    classroomActionMessage.value = ''
+    const result = await importStudents(studentImportFile.value)
+    applyClassroomWorkspace(result.workspace)
+    classroomActionMessage.value = `学生导入完成：新增 ${result.summary.created} 条，更新 ${result.summary.updated} 条，跳过 ${result.summary.skipped} 条。`
+    studentImportFile.value = null
+    studentImportFileName.value = ''
+    actionPanel.value = 'none'
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '导入学生档案失败'
+  }
+}
+
+async function submitTeacherImport() {
+  if (!teacherImportFile.value) return
+  try {
+    classroomError.value = ''
+    classroomActionMessage.value = ''
+    const result = await importTeachers(teacherImportFile.value)
+    applyClassroomWorkspace(result.workspace)
+    classroomActionMessage.value = `任课老师导入完成：新增 ${result.summary.created} 条，更新 ${result.summary.updated} 条，跳过 ${result.summary.skipped} 条。`
+    teacherImportFile.value = null
+    teacherImportFileName.value = ''
+    actionPanel.value = 'none'
+  } catch (error) {
+    classroomError.value = error instanceof Error ? error.message : '导入任课老师失败'
+  }
+}
+
 function openPolicyEditor(policyId?: string) {
   const target = policies.value.find((item) => item.id === (policyId ?? selectedPolicyId.value))
   if (!target) return
@@ -661,6 +749,10 @@ onMounted(async () => {
             <div class="status-inline">正在加载班级、学生、任课老师和展示策略...</div>
           </article>
 
+          <article v-if="classroomActionMessage" class="panel panel-wide">
+            <div class="status-inline">{{ classroomActionMessage }}</div>
+          </article>
+
           <article class="panel panel-wide">
             <div class="panel-head">
               <div>
@@ -668,8 +760,12 @@ onMounted(async () => {
                 <h3>班级档案与阶段状态</h3>
               </div>
               <div class="panel-actions">
-                <button type="button" class="ghost-btn small">编辑班级信息</button>
-                <button type="button" class="ghost-btn small">导入学生档案</button>
+                <button type="button" class="ghost-btn small" @click="classPanelMode = 'policy'; openPolicyEditor()">
+                  编辑班级策略
+                </button>
+                <button type="button" class="ghost-btn small" @click="actionPanel = 'student-import'">
+                  导入学生档案
+                </button>
               </div>
             </div>
 
@@ -789,7 +885,25 @@ onMounted(async () => {
                 <span>{{ assignment.permissionStatus === 'synced' ? '已同步' : '待同步' }}</span>
                 <span class="row-actions">
                   <button type="button" class="ghost-btn tiny" @click="openTeacherEditor(assignment.id)">编辑</button>
-                  <button type="button" class="ghost-btn tiny" @click="openTeacherDetail(assignment.id)">同步权限</button>
+                  <button
+                    v-if="assignment.accountStatus !== 'bound'"
+                    type="button"
+                    class="ghost-btn tiny"
+                    @click="bindTeacher(assignment.id)"
+                  >
+                    绑定账号
+                  </button>
+                  <button
+                    v-else-if="assignment.permissionStatus !== 'synced'"
+                    type="button"
+                    class="ghost-btn tiny"
+                    @click="syncTeacher(assignment.id)"
+                  >
+                    同步权限
+                  </button>
+                  <button v-else type="button" class="ghost-btn tiny" @click="openTeacherDetail(assignment.id)">
+                    查看
+                  </button>
                 </span>
               </div>
             </div>
@@ -1399,13 +1513,27 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="actionPanel === 'student-import'" class="task-list">
+        <input
+          ref="studentImportInput"
+          type="file"
+          accept=".csv"
+          class="hidden-file-input"
+          @change="handleStudentImportFileChange"
+        />
         <div class="task-item">
           <strong>导入模板字段</strong>
           <p>学号、姓名、性别、家长手机号、选科组合。</p>
-          <span>导入后自动进入完整度检查</span>
+          <span>当前支持 CSV，学号相同会更新已有学生。</span>
+        </div>
+        <div class="task-item">
+          <strong>已选择文件</strong>
+          <p>{{ studentImportFileName || '暂未选择 CSV 文件' }}</p>
+          <span>确认后会写入后端并刷新班级档案。</span>
         </div>
         <div class="row-actions">
-          <button type="button" class="solid-btn small" @click="actionPanel = 'none'">模拟导入完成</button>
+          <button type="button" class="ghost-btn small" @click="studentImportInput?.click()">选择文件</button>
+          <button type="button" class="solid-btn small" :disabled="!studentImportFile" @click="submitStudentImport">确认导入</button>
+          <button type="button" class="ghost-btn small" @click="actionPanel = 'none'">取消</button>
         </div>
       </div>
 
@@ -1443,13 +1571,27 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="actionPanel === 'teacher-import'" class="task-list">
+        <input
+          ref="teacherImportInput"
+          type="file"
+          accept=".csv"
+          class="hidden-file-input"
+          @change="handleTeacherImportFileChange"
+        />
         <div class="task-item">
           <strong>导入模板字段</strong>
           <p>学科、老师姓名、授课范围、手机号。</p>
-          <span>导入后自动进入账号绑定与权限同步流程</span>
+          <span>当前支持 CSV；有手机号会自动视为账号已绑定。</span>
+        </div>
+        <div class="task-item">
+          <strong>已选择文件</strong>
+          <p>{{ teacherImportFileName || '暂未选择 CSV 文件' }}</p>
+          <span>导入后仍需点击同步权限，授权才会生效。</span>
         </div>
         <div class="row-actions">
-          <button type="button" class="solid-btn small" @click="actionPanel = 'none'">模拟导入完成</button>
+          <button type="button" class="ghost-btn small" @click="teacherImportInput?.click()">选择文件</button>
+          <button type="button" class="solid-btn small" :disabled="!teacherImportFile" @click="submitTeacherImport">确认导入</button>
+          <button type="button" class="ghost-btn small" @click="actionPanel = 'none'">取消</button>
         </div>
       </div>
 

@@ -1,6 +1,8 @@
 package classroom
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,8 +17,12 @@ type Service interface {
 	GetWorkspace() (classroom.Workspace, error)
 	CreateStudent(req classroom.SaveStudentRequest) (classroom.Workspace, error)
 	UpdateStudent(id string, req classroom.SaveStudentRequest) (classroom.Workspace, bool, error)
+	ImportStudents(fileName string, content []byte) (classroom.Workspace, classroom.ImportSummary, error)
 	CreateTeacher(req classroom.SaveTeacherRequest) (classroom.Workspace, error)
 	UpdateTeacher(id string, req classroom.SaveTeacherRequest) (classroom.Workspace, bool, error)
+	ImportTeachers(fileName string, content []byte) (classroom.Workspace, classroom.ImportSummary, error)
+	BindTeacherAccount(id string) (classroom.Workspace, bool, error)
+	SyncTeacherPermission(id string) (classroom.Workspace, bool, error)
 	UpdatePolicy(id string, req classroom.SavePolicyRequest) (classroom.Workspace, bool, error)
 }
 
@@ -78,6 +84,61 @@ func (s *PersistentService) UpdateStudent(id string, req classroom.SaveStudentRe
 	return workspace, true, err
 }
 
+func (s *PersistentService) ImportStudents(fileName string, content []byte) (classroom.Workspace, classroom.ImportSummary, error) {
+	rows, err := parseCSVRows(fileName, content)
+	if err != nil {
+		return classroom.Workspace{}, classroom.ImportSummary{}, err
+	}
+	workspace, err := s.repo.GetWorkspace(s.classID)
+	if err != nil {
+		return classroom.Workspace{}, classroom.ImportSummary{}, err
+	}
+	byNo := map[string]classroom.Student{}
+	for _, student := range workspace.Students {
+		byNo[student.StudentNo] = student
+	}
+
+	summary := classroom.ImportSummary{Errors: []string{}}
+	for index, row := range rows {
+		studentNo := row["学号"]
+		name := row["姓名"]
+		if studentNo == "" || name == "" {
+			summary.Skipped++
+			summary.Errors = append(summary.Errors, fmt.Sprintf("第 %d 行缺少学号或姓名", index+2))
+			continue
+		}
+		id := fmt.Sprintf("student-%d-%d", time.Now().UnixNano(), index)
+		if existing, ok := byNo[studentNo]; ok {
+			id = existing.ID
+			summary.Updated++
+		} else {
+			summary.Created++
+		}
+		parentStatus := "待补充"
+		if row["家长手机号"] != "" {
+			parentStatus = "已绑定"
+		}
+		selectionStatus := "待确认"
+		if row["选科组合"] != "" {
+			selectionStatus = "已登记"
+		}
+		student := studentFromRequest(id, classroom.SaveStudentRequest{
+			StudentNo:       studentNo,
+			Name:            name,
+			Gender:          defaultString(row["性别"], "男"),
+			Combination:     row["选科组合"],
+			ParentMobile:    row["家长手机号"],
+			ParentStatus:    parentStatus,
+			SelectionStatus: selectionStatus,
+		})
+		if err := s.repo.SaveStudent(s.classID, student); err != nil {
+			return classroom.Workspace{}, classroom.ImportSummary{}, err
+		}
+	}
+	workspace, err = s.repo.GetWorkspace(s.classID)
+	return workspace, summary, err
+}
+
 func (s *PersistentService) CreateTeacher(req classroom.SaveTeacherRequest) (classroom.Workspace, error) {
 	teacher := teacherFromRequest(fmt.Sprintf("teacher-%d", time.Now().UnixNano()), req)
 	if teacher.Subject == "" {
@@ -108,6 +169,95 @@ func (s *PersistentService) UpdateTeacher(id string, req classroom.SaveTeacherRe
 	}
 	workspace, err = s.repo.GetWorkspace(s.classID)
 	return workspace, true, err
+}
+
+func (s *PersistentService) ImportTeachers(fileName string, content []byte) (classroom.Workspace, classroom.ImportSummary, error) {
+	rows, err := parseCSVRows(fileName, content)
+	if err != nil {
+		return classroom.Workspace{}, classroom.ImportSummary{}, err
+	}
+	workspace, err := s.repo.GetWorkspace(s.classID)
+	if err != nil {
+		return classroom.Workspace{}, classroom.ImportSummary{}, err
+	}
+	bySubjectTeacher := map[string]classroom.TeacherAssignment{}
+	for _, teacher := range workspace.Teachers {
+		bySubjectTeacher[teacher.Subject+"|"+teacher.Teacher] = teacher
+	}
+
+	summary := classroom.ImportSummary{Errors: []string{}}
+	for index, row := range rows {
+		subject := row["学科"]
+		teacherName := firstNonEmpty(row["老师姓名"], row["任课老师"], row["教师"])
+		if subject == "" || teacherName == "" {
+			summary.Skipped++
+			summary.Errors = append(summary.Errors, fmt.Sprintf("第 %d 行缺少学科或老师姓名", index+2))
+			continue
+		}
+		key := subject + "|" + teacherName
+		id := fmt.Sprintf("teacher-%d-%d", time.Now().UnixNano(), index)
+		if existing, ok := bySubjectTeacher[key]; ok {
+			id = existing.ID
+			summary.Updated++
+		} else {
+			summary.Created++
+		}
+		accountStatus := "pending"
+		if firstNonEmpty(row["手机号"], row["账号手机号"], row["教师手机号"]) != "" {
+			accountStatus = "bound"
+		}
+		teacher := teacherFromRequest(id, classroom.SaveTeacherRequest{
+			Subject:          subject,
+			Teacher:          teacherName,
+			Classes:          defaultString(row["授课范围"], "待设置范围"),
+			AccountStatus:    accountStatus,
+			PermissionStatus: "pending",
+		})
+		if err := s.repo.SaveTeacher(s.classID, teacher); err != nil {
+			return classroom.Workspace{}, classroom.ImportSummary{}, err
+		}
+	}
+	workspace, err = s.repo.GetWorkspace(s.classID)
+	return workspace, summary, err
+}
+
+func (s *PersistentService) BindTeacherAccount(id string) (classroom.Workspace, bool, error) {
+	return s.updateTeacherState(id, func(teacher classroom.TeacherAssignment) (classroom.TeacherAssignment, error) {
+		teacher.AccountStatus = "bound"
+		return teacher, nil
+	})
+}
+
+func (s *PersistentService) SyncTeacherPermission(id string) (classroom.Workspace, bool, error) {
+	return s.updateTeacherState(id, func(teacher classroom.TeacherAssignment) (classroom.TeacherAssignment, error) {
+		if teacher.AccountStatus != "bound" {
+			return teacher, fmt.Errorf("请先绑定教师账号，再同步权限")
+		}
+		teacher.PermissionStatus = "synced"
+		return teacher, nil
+	})
+}
+
+func (s *PersistentService) updateTeacherState(id string, mutate func(classroom.TeacherAssignment) (classroom.TeacherAssignment, error)) (classroom.Workspace, bool, error) {
+	workspace, err := s.repo.GetWorkspace(s.classID)
+	if err != nil {
+		return classroom.Workspace{}, false, err
+	}
+	for _, teacher := range workspace.Teachers {
+		if teacher.ID == id {
+			teacher, err = mutate(teacher)
+			if err != nil {
+				return classroom.Workspace{}, false, err
+			}
+			teacher = normalizeTeacherState(teacher)
+			if err := s.repo.SaveTeacher(s.classID, teacher); err != nil {
+				return classroom.Workspace{}, false, err
+			}
+			workspace, err = s.repo.GetWorkspace(s.classID)
+			return workspace, true, err
+		}
+	}
+	return classroom.Workspace{}, false, nil
 }
 
 func (s *PersistentService) UpdatePolicy(id string, req classroom.SavePolicyRequest) (classroom.Workspace, bool, error) {
@@ -174,6 +324,55 @@ func (s *MemoryService) UpdateStudent(id string, req classroom.SaveStudentReques
 	return classroom.Workspace{}, false, nil
 }
 
+func (s *MemoryService) ImportStudents(fileName string, content []byte) (classroom.Workspace, classroom.ImportSummary, error) {
+	rows, err := parseCSVRows(fileName, content)
+	if err != nil {
+		return classroom.Workspace{}, classroom.ImportSummary{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	byNo := map[string]int{}
+	for index, student := range s.workspace.Students {
+		byNo[student.StudentNo] = index
+	}
+	summary := classroom.ImportSummary{Errors: []string{}}
+	for index, row := range rows {
+		if row["学号"] == "" || row["姓名"] == "" {
+			summary.Skipped++
+			summary.Errors = append(summary.Errors, fmt.Sprintf("第 %d 行缺少学号或姓名", index+2))
+			continue
+		}
+		parentStatus := "待补充"
+		if row["家长手机号"] != "" {
+			parentStatus = "已绑定"
+		}
+		selectionStatus := "待确认"
+		if row["选科组合"] != "" {
+			selectionStatus = "已登记"
+		}
+		student := studentFromRequest(fmt.Sprintf("student-%d-%d", time.Now().UnixNano(), index), classroom.SaveStudentRequest{
+			StudentNo:       row["学号"],
+			Name:            row["姓名"],
+			Gender:          defaultString(row["性别"], "男"),
+			Combination:     row["选科组合"],
+			ParentMobile:    row["家长手机号"],
+			ParentStatus:    parentStatus,
+			SelectionStatus: selectionStatus,
+		})
+		if existingIndex, ok := byNo[student.StudentNo]; ok {
+			student.ID = s.workspace.Students[existingIndex].ID
+			s.workspace.Students[existingIndex] = student
+			summary.Updated++
+		} else {
+			s.workspace.Students = append([]classroom.Student{student}, s.workspace.Students...)
+			summary.Created++
+		}
+	}
+	s.workspace = withRosterInsights(s.workspace)
+	return snapshot(s.workspace), summary, nil
+}
+
 func (s *MemoryService) CreateTeacher(req classroom.SaveTeacherRequest) (classroom.Workspace, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -200,6 +399,87 @@ func (s *MemoryService) UpdateTeacher(id string, req classroom.SaveTeacherReques
 	for i := range s.workspace.Teachers {
 		if s.workspace.Teachers[i].ID == id {
 			s.workspace.Teachers[i] = teacherFromRequest(id, req)
+			s.workspace = withRosterInsights(s.workspace)
+			return snapshot(s.workspace), true, nil
+		}
+	}
+	return classroom.Workspace{}, false, nil
+}
+
+func (s *MemoryService) ImportTeachers(fileName string, content []byte) (classroom.Workspace, classroom.ImportSummary, error) {
+	rows, err := parseCSVRows(fileName, content)
+	if err != nil {
+		return classroom.Workspace{}, classroom.ImportSummary{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	byKey := map[string]int{}
+	for index, teacher := range s.workspace.Teachers {
+		byKey[teacher.Subject+"|"+teacher.Teacher] = index
+	}
+	summary := classroom.ImportSummary{Errors: []string{}}
+	for index, row := range rows {
+		subject := row["学科"]
+		teacherName := firstNonEmpty(row["老师姓名"], row["任课老师"], row["教师"])
+		if subject == "" || teacherName == "" {
+			summary.Skipped++
+			summary.Errors = append(summary.Errors, fmt.Sprintf("第 %d 行缺少学科或老师姓名", index+2))
+			continue
+		}
+		accountStatus := "pending"
+		if firstNonEmpty(row["手机号"], row["账号手机号"], row["教师手机号"]) != "" {
+			accountStatus = "bound"
+		}
+		teacher := teacherFromRequest(fmt.Sprintf("teacher-%d-%d", time.Now().UnixNano(), index), classroom.SaveTeacherRequest{
+			Subject:          subject,
+			Teacher:          teacherName,
+			Classes:          defaultString(row["授课范围"], "待设置范围"),
+			AccountStatus:    accountStatus,
+			PermissionStatus: "pending",
+		})
+		key := subject + "|" + teacherName
+		if existingIndex, ok := byKey[key]; ok {
+			teacher.ID = s.workspace.Teachers[existingIndex].ID
+			s.workspace.Teachers[existingIndex] = teacher
+			summary.Updated++
+		} else {
+			s.workspace.Teachers = append([]classroom.TeacherAssignment{teacher}, s.workspace.Teachers...)
+			summary.Created++
+		}
+	}
+	s.workspace = withRosterInsights(s.workspace)
+	return snapshot(s.workspace), summary, nil
+}
+
+func (s *MemoryService) BindTeacherAccount(id string) (classroom.Workspace, bool, error) {
+	return s.updateTeacherState(id, func(teacher classroom.TeacherAssignment) (classroom.TeacherAssignment, error) {
+		teacher.AccountStatus = "bound"
+		return teacher, nil
+	})
+}
+
+func (s *MemoryService) SyncTeacherPermission(id string) (classroom.Workspace, bool, error) {
+	return s.updateTeacherState(id, func(teacher classroom.TeacherAssignment) (classroom.TeacherAssignment, error) {
+		if teacher.AccountStatus != "bound" {
+			return teacher, fmt.Errorf("请先绑定教师账号，再同步权限")
+		}
+		teacher.PermissionStatus = "synced"
+		return teacher, nil
+	})
+}
+
+func (s *MemoryService) updateTeacherState(id string, mutate func(classroom.TeacherAssignment) (classroom.TeacherAssignment, error)) (classroom.Workspace, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i := range s.workspace.Teachers {
+		if s.workspace.Teachers[i].ID == id {
+			teacher, err := mutate(s.workspace.Teachers[i])
+			if err != nil {
+				return classroom.Workspace{}, false, err
+			}
+			s.workspace.Teachers[i] = normalizeTeacherState(teacher)
 			s.workspace = withRosterInsights(s.workspace)
 			return snapshot(s.workspace), true, nil
 		}
@@ -322,22 +602,30 @@ func teacherFromRequest(id string, req classroom.SaveTeacherRequest) classroom.T
 		permissionStatus = "pending"
 	}
 
-	syncStatus := "待补账号绑定"
-	if accountStatus == "bound" && permissionStatus == "synced" {
-		syncStatus = "已同步"
-	} else if accountStatus == "bound" {
-		syncStatus = "待同步权限"
-	}
-
-	return classroom.TeacherAssignment{
+	return normalizeTeacherState(classroom.TeacherAssignment{
 		ID:               id,
 		Subject:          req.Subject,
 		Teacher:          req.Teacher,
 		Classes:          req.Classes,
-		SyncStatus:       syncStatus,
 		AccountStatus:    accountStatus,
 		PermissionStatus: permissionStatus,
+	})
+}
+
+func normalizeTeacherState(teacher classroom.TeacherAssignment) classroom.TeacherAssignment {
+	if teacher.AccountStatus == "" {
+		teacher.AccountStatus = "pending"
 	}
+	if teacher.PermissionStatus == "" {
+		teacher.PermissionStatus = "pending"
+	}
+	teacher.SyncStatus = "待补账号绑定"
+	if teacher.AccountStatus == "bound" && teacher.PermissionStatus == "synced" {
+		teacher.SyncStatus = "已同步"
+	} else if teacher.AccountStatus == "bound" {
+		teacher.SyncStatus = "待同步权限"
+	}
+	return teacher
 }
 
 func splitCombination(combination string) []string {
@@ -347,6 +635,60 @@ func splitCombination(combination string) []string {
 		return []string{}
 	}
 	return strings.Split(expanded, ",")
+}
+
+func parseCSVRows(fileName string, content []byte) ([]map[string]string, error) {
+	if !strings.HasSuffix(strings.ToLower(fileName), ".csv") {
+		return nil, fmt.Errorf("当前批量导入先支持 CSV 文件")
+	}
+	reader := csv.NewReader(bytes.NewReader(content))
+	reader.TrimLeadingSpace = true
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("CSV 解析失败：%w", err)
+	}
+	if len(records) < 2 {
+		return []map[string]string{}, nil
+	}
+	headers := make([]string, len(records[0]))
+	for index, header := range records[0] {
+		headers[index] = strings.TrimSpace(header)
+	}
+	rows := []map[string]string{}
+	for _, record := range records[1:] {
+		row := map[string]string{}
+		empty := true
+		for index, header := range headers {
+			value := ""
+			if index < len(record) {
+				value = strings.TrimSpace(record[index])
+			}
+			if value != "" {
+				empty = false
+			}
+			row[header] = value
+		}
+		if !empty {
+			rows = append(rows, row)
+		}
+	}
+	return rows, nil
+}
+
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func defaultWorkspace() classroom.Workspace {

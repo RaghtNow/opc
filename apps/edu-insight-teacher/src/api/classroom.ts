@@ -36,6 +36,13 @@ export type SavePolicyPayload = {
   note: string
 }
 
+export type ImportSummary = {
+  created: number
+  updated: number
+  skipped: number
+  errors: string[]
+}
+
 export async function fetchClassroomWorkspace(): Promise<ClassroomWorkspace> {
   const response = await fetch(`${API_BASE}/classes/current`)
   if (!response.ok) throw new Error('获取班级与师生数据失败')
@@ -58,19 +65,50 @@ export async function updateTeacher(teacherID: string, payload: SaveTeacherPaylo
   return requestWorkspace(`/classes/current/teachers/${teacherID}`, 'PATCH', payload)
 }
 
+export async function bindTeacherAccount(teacherID: string): Promise<ClassroomWorkspace> {
+  return requestWorkspace(`/classes/current/teachers/${teacherID}/bind-account`, 'POST')
+}
+
+export async function syncTeacherPermission(teacherID: string): Promise<ClassroomWorkspace> {
+  return requestWorkspace(`/classes/current/teachers/${teacherID}/sync-permission`, 'POST')
+}
+
+export async function importStudents(file: File): Promise<{ workspace: ClassroomWorkspace; summary: ImportSummary }> {
+  return importFile('/classes/current/students/import', file)
+}
+
+export async function importTeachers(file: File): Promise<{ workspace: ClassroomWorkspace; summary: ImportSummary }> {
+  return importFile('/classes/current/teachers/import', file)
+}
+
 export async function updatePolicy(policyID: string, payload: SavePolicyPayload): Promise<ClassroomWorkspace> {
   return requestWorkspace(`/classes/current/policies/${policyID}`, 'PATCH', payload)
 }
 
-async function requestWorkspace(path: string, method: 'POST' | 'PATCH', payload: unknown): Promise<ClassroomWorkspace> {
+async function requestWorkspace(path: string, method: 'POST' | 'PATCH', payload?: unknown): Promise<ClassroomWorkspace> {
   const response = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(payload)
+    body: payload === undefined ? undefined : JSON.stringify(payload)
   })
 
   if (!response.ok) throw new Error('保存班级与师生数据失败')
+  return response.json()
+}
+
+async function importFile(path: string, file: File): Promise<{ workspace: ClassroomWorkspace; summary: ImportSummary }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    body: formData
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.error ?? data.message ?? '导入失败')
+  }
   return response.json()
 }
