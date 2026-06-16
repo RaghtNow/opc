@@ -1,0 +1,60 @@
+name: CI edu-insight
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'fix/**'
+      - 'ci/**'
+    paths:
+      - 'apps/edu-insight-teacher/**'
+      - 'apps/edu-insight-api/**'
+      - '.github/workflows/ci-edu-insight.yml'
+  pull_request:
+    branches: [main, master, dev]
+    paths:
+      - 'apps/edu-insight-teacher/**'
+      - 'apps/edu-insight-api/**'
+      - '.github/workflows/ci-edu-insight.yml'
+      - '.github/workflows/docker-edu-insight.yml'
+
+jobs:
+  teacher-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/edu-insight-teacher
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/edu-insight-teacher/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build teacher app
+        run: npm run build
+
+  api-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/edu-insight-api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/edu-insight-api/go.mod
+          cache-dependency-path: apps/edu-insight-api/go.sum
+
+      - name: Build API
+        run: go build -buildvcs=false ./cmd/server

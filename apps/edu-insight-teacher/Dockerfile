@@ -10,6 +10,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+ARG VITE_EDU_INSIGHT_API_BASE=http://127.0.0.1:8088/api
+ENV VITE_EDU_INSIGHT_API_BASE=${VITE_EDU_INSIGHT_API_BASE}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY package*.json ./
 COPY . .

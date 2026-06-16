@@ -56,6 +56,13 @@
 - `POST /api/exams/import`
 - `PATCH /api/exams/:id/scores/:scoreId`
 
+当前 CI/CD：
+- `ci-edu-insight.yml` 为 feature/PR 提供教师端和 Go API 构建校验。
+- `docker-edu-insight.yml` 在 `dev/main/master` 构建教师端和 Go API 镜像。
+- `docker-edu-insight.yml` 在 `dev` 部署测试环境，在 `main/master` 部署生产环境。
+- 测试环境端口：teacher `8086`，api `8088`。
+- 生产环境端口：teacher `8085`，api `8087`。
+
 ### 2.3 当前结构取舍
 
 当前仓库不再保留根目录 `edu-insight/` 空骨架。

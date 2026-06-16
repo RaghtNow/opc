@@ -135,6 +135,7 @@ SSH 连服务器 → docker compose pull → up -d
 |------|-----------|-----------|
 | json-parser | `docker-json-parser.yml` | `deploy-json-parser.yml` |
 | json-editor | `docker-json-editor.yml` | `deploy-json-editor.yml` |
+| edu-insight | `ci-edu-insight.yml` / `docker-edu-insight.yml` | `docker-edu-insight.yml` |
 
 ---
 
@@ -149,6 +150,8 @@ SSH 连服务器 → docker compose pull → up -d
 |------|---------|---------|
 | json-parser | 8081 | 8082 |
 | json-editor | 8083 | 8084 |
+| edu-insight-teacher | 8085 | 8086 |
+| edu-insight-api | 8087 | 8088 |
 | nginx | 80/443 | 8080 |
 
 ### 新应用接入

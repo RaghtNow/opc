@@ -29,7 +29,7 @@ export type ImportIssue = {
   status: string
 }
 
-const API_BASE = 'http://127.0.0.1:8088/api'
+const API_BASE = import.meta.env.VITE_EDU_INSIGHT_API_BASE ?? 'http://127.0.0.1:8088/api'
 
 export async function fetchExams(): Promise<ExamItem[]> {
   const response = await fetch(`${API_BASE}/exams`)

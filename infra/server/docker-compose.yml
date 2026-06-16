@@ -23,6 +23,30 @@ services:
     networks:
       - opc-network
 
+  edu-insight-teacher:
+    image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-edu-insight-teacher:latest
+    container_name: opc-edu-insight-teacher
+    ports:
+      - "8085:80"
+    restart: unless-stopped
+    depends_on:
+      - edu-insight-api
+    labels:
+      - "com.opc.service=edu-insight-teacher"
+    networks:
+      - opc-network
+
+  edu-insight-api:
+    image: crpi-7lyodabocu0g6i1q.cn-beijing.personal.cr.aliyuncs.com/kdqg/opc-edu-insight-api:latest
+    container_name: opc-edu-insight-api
+    ports:
+      - "8087:8088"
+    restart: unless-stopped
+    labels:
+      - "com.opc.service=edu-insight-api"
+    networks:
+      - opc-network
+
   nginx:
     image: nginx:alpine
     container_name: opc-nginx
@@ -37,6 +61,8 @@ services:
     depends_on:
       - json-parser
       - json-editor
+      - edu-insight-teacher
+      - edu-insight-api
     restart: unless-stopped
     networks:
       - opc-network

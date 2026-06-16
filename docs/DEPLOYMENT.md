@@ -112,11 +112,31 @@ your-domain.com → 服务器IP
 | `SERVER_HOST` | 服务器 IP | 1.2.3.4 |
 | `SERVER_USER` | SSH 用户名 | root |
 | `SSH_PRIVATE_KEY` | SSH 私钥 | ~/.ssh/id_rsa |
+| `ALIYUN_USERNAME` | 阿里云 ACR 用户名 | xxx |
+| `ALIYUN_PASSWORD` | 阿里云 ACR 密码 | xxx |
 
 ### 自动部署流程
 
 1. 推送代码到 `dev` 分支 → 自动构建镜像
 2. 推送代码到 `main` 分支 → 自动构建 + 自动部署到服务器
+
+### edu-insight 自动部署
+
+当前已接入：
+
+| 应用 | 镜像 | 生产端口 | 测试端口 |
+|------|------|---------|---------|
+| edu-insight-teacher | `opc-edu-insight-teacher` | 8085 | 8086 |
+| edu-insight-api | `opc-edu-insight-api` | 8087 | 8088 |
+
+触发规则：
+- PR 到 `dev/main/master`：只构建校验，不推镜像。
+- 合入 `dev`：构建 `dev-latest` 镜像，并部署测试环境。
+- 合入 `main/master`：构建 `latest` 镜像，并部署生产环境。
+
+相关 workflow：
+- `.github/workflows/ci-edu-insight.yml`
+- `.github/workflows/docker-edu-insight.yml`
 
 ---
 
