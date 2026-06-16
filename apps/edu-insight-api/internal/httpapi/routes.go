@@ -20,5 +20,6 @@ func RegisterRoutes(engine *gin.Engine, cfg config.Config) {
 	api := engine.Group("/api")
 	{
 		routes.RegisterMetaRoutes(api, cfg)
+		routes.RegisterScoreRoutes(api)
 	}
 }

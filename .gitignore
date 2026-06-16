@@ -1,2 +1,5 @@
 node_modules/
 .openclaw/
+dist/
+apps/**/dist/
+apps/**/server

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   alertItems,
   classMembers,
@@ -23,6 +23,7 @@ import {
   teacherAssignments,
   workContexts
 } from './data/dashboard'
+import { fetchExamDetail, fetchExams, importExam, updateExamScore } from './api/score'
 import { parseAndValidateCsv } from './utils/csvImport'
 
 const activeNav = ref('overview')
@@ -53,6 +54,8 @@ const policies = ref(structuredClone(displayPolicies))
 const exams = ref(structuredClone(examRecords))
 const issues = ref(structuredClone(importIssues))
 const scoreRows = ref(structuredClone(scoreEntries))
+const scoreLoading = ref(false)
+const scoreError = ref('')
 
 const studentForm = ref({
   id: '',
@@ -184,6 +187,7 @@ function openExamDetail(examId: string) {
   selectedExamId.value = examId
   activeNav.value = 'scores'
   actionPanel.value = 'none'
+  void loadExamDetail(examId)
 }
 
 function resolveIssue(issueId: string) {
@@ -376,18 +380,21 @@ function savePolicyForm() {
 }
 
 function saveScoreUpload() {
-  const newId = `exam-${Date.now()}`
-  const coverageLabel = examForm.value.subjects.join(' / ')
-
-  exams.value.unshift({
-    id: newId,
+  importExam({
     name: examForm.value.name || '新考试成绩记录',
     type: examForm.value.type,
     date: examForm.value.date,
-    subjectCoverage: coverageLabel,
-    importStatus: '待校验'
+    subjects: examForm.value.subjects,
+    subjectCoverage: examForm.value.subjects.join(' / '),
+    fileName: scoreUploadForm.value.fileName,
+    scores: scoreRows.value,
+    issues: issues.value
+  }).then(async (detail) => {
+    await loadExamList()
+    selectedExamId.value = detail.exam.id
+    scoreRows.value = detail.scores
+    issues.value = detail.issues
   })
-  selectedExamId.value = newId
   actionPanel.value = 'none'
   scoreUploadStep.value = 'meta'
   scoreUploadForm.value.fileName = ''
@@ -463,20 +470,52 @@ function openScoreEditor(scoreId: string) {
 }
 
 function saveScoreEdit() {
-  const target = scoreRows.value.find((item) => item.id === scoreEditForm.value.id)
-  if (!target) return
-
-  Object.assign(target, {
+  updateExamScore(selectedExamId.value, scoreEditForm.value.id, {
     chinese: scoreEditForm.value.chinese,
     math: scoreEditForm.value.math,
     english: scoreEditForm.value.english,
     electiveLabel: scoreEditForm.value.electiveLabel,
-    elective: scoreEditForm.value.elective,
+    electiveScore: scoreEditForm.value.elective,
     total: scoreEditForm.value.total
+  }).then((detail) => {
+    scoreRows.value = detail.scores
+    issues.value = detail.issues
   })
-
   actionPanel.value = 'none'
 }
+
+async function loadExamList() {
+  try {
+    scoreError.value = ''
+    exams.value = await fetchExams()
+    if (exams.value.length > 0 && !exams.value.find((item) => item.id === selectedExamId.value)) {
+      selectedExamId.value = exams.value[0].id
+    }
+  } catch (error) {
+    scoreError.value = error instanceof Error ? error.message : '获取考试列表失败'
+  }
+}
+
+async function loadExamDetail(examID: string) {
+  try {
+    scoreLoading.value = true
+    scoreError.value = ''
+    const result = await fetchExamDetail(examID)
+    scoreRows.value = result.scores
+    issues.value = result.issues
+  } catch (error) {
+    scoreError.value = error instanceof Error ? error.message : '获取考试详情失败'
+  } finally {
+    scoreLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadExamList()
+  if (selectedExamId.value) {
+    await loadExamDetail(selectedExamId.value)
+  }
+})
 </script>
 
 <template>
@@ -848,6 +887,14 @@ function saveScoreEdit() {
 
       <template v-else-if="activeNav === 'scores'">
         <section class="content-grid">
+          <article v-if="scoreError" class="panel panel-wide">
+            <div class="task-item">
+              <strong>考试与成绩接口异常</strong>
+              <p>{{ scoreError }}</p>
+              <span>请确认 Go 后端已运行在 127.0.0.1:8088</span>
+            </div>
+          </article>
+
           <article class="panel panel-wide">
             <div class="panel-head">
               <div>
@@ -888,6 +935,8 @@ function saveScoreEdit() {
                 <h3>{{ selectedExam.name }}</h3>
               </div>
             </div>
+
+            <div v-if="scoreLoading" class="status-inline">正在加载考试详情与成绩明细...</div>
 
             <div class="task-list">
               <div class="task-item">
