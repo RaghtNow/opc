@@ -32,3 +32,21 @@ GET /health
 ```text
 GET /api/meta
 ```
+
+## 本地 MySQL
+
+本地开发默认使用 MySQL：
+
+```text
+database: edu_insight_local
+user: edu_insight
+dsn: edu_insight:edu_insight_local_123@tcp(127.0.0.1:3306)/edu_insight_local?parseTime=true&charset=utf8mb4&loc=Local
+```
+
+启动示例：
+
+```bash
+DB_DSN='edu_insight:edu_insight_local_123@tcp(127.0.0.1:3306)/edu_insight_local?parseTime=true&charset=utf8mb4&loc=Local' go run ./cmd/server
+```
+
+如果不设置 `DB_DSN`，服务会退回内存模式，方便 CI 或无数据库环境构建验证。

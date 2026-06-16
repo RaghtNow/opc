@@ -13,6 +13,7 @@ FROM alpine:3.20
 WORKDIR /app
 
 COPY --from=builder /bin/edu-insight-api /app/edu-insight-api
+COPY migrations /app/migrations
 
 EXPOSE 8088
 

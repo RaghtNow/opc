@@ -3,16 +3,18 @@ package config
 import "os"
 
 type Config struct {
-	AppEnv string
-	Port   string
-	DBDSN  string
+	AppEnv        string
+	Port          string
+	DBDSN         string
+	MigrationsDir string
 }
 
 func Load() Config {
 	return Config{
-		AppEnv: getEnv("APP_ENV", "development"),
-		Port:   getEnv("PORT", "8088"),
-		DBDSN:  getEnv("DB_DSN", ""),
+		AppEnv:        getEnv("APP_ENV", "development"),
+		Port:          getEnv("PORT", "8088"),
+		DBDSN:         getEnv("DB_DSN", ""),
+		MigrationsDir: getEnv("MIGRATIONS_DIR", "migrations"),
 	}
 }
 

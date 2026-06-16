@@ -9,24 +9,142 @@ import (
 	"github.com/RaghtNow/opc/apps/edu-insight-api/internal/domain/classroom"
 )
 
-type Service struct {
+const CurrentClassID = "admin-class-g2-3"
+
+type Service interface {
+	GetWorkspace() (classroom.Workspace, error)
+	CreateStudent(req classroom.SaveStudentRequest) (classroom.Workspace, error)
+	UpdateStudent(id string, req classroom.SaveStudentRequest) (classroom.Workspace, bool, error)
+	CreateTeacher(req classroom.SaveTeacherRequest) (classroom.Workspace, error)
+	UpdateTeacher(id string, req classroom.SaveTeacherRequest) (classroom.Workspace, bool, error)
+	UpdatePolicy(id string, req classroom.SavePolicyRequest) (classroom.Workspace, bool, error)
+}
+
+type Repository interface {
+	GetWorkspace(classID string) (classroom.Workspace, error)
+	SaveStudent(classID string, student classroom.Student) error
+	SaveTeacher(classID string, teacher classroom.TeacherAssignment) error
+	SavePolicy(classID string, policy classroom.Policy) error
+	SeedIfEmpty(workspace classroom.Workspace) error
+}
+
+type PersistentService struct {
+	repo    Repository
+	classID string
+}
+
+func NewPersistentService(repo Repository) (*PersistentService, error) {
+	service := &PersistentService{repo: repo, classID: CurrentClassID}
+	if err := repo.SeedIfEmpty(defaultWorkspace()); err != nil {
+		return nil, err
+	}
+	return service, nil
+}
+
+func (s *PersistentService) GetWorkspace() (classroom.Workspace, error) {
+	return s.repo.GetWorkspace(s.classID)
+}
+
+func (s *PersistentService) CreateStudent(req classroom.SaveStudentRequest) (classroom.Workspace, error) {
+	student := studentFromRequest(fmt.Sprintf("student-%d", time.Now().UnixNano()), req)
+	if student.StudentNo == "" {
+		workspace, err := s.repo.GetWorkspace(s.classID)
+		if err != nil {
+			return classroom.Workspace{}, err
+		}
+		student.StudentNo = fmt.Sprintf("NEW%03d", len(workspace.Students)+1)
+	}
+	if student.Name == "" {
+		student.Name = "新学生"
+	}
+	if err := s.repo.SaveStudent(s.classID, student); err != nil {
+		return classroom.Workspace{}, err
+	}
+	return s.repo.GetWorkspace(s.classID)
+}
+
+func (s *PersistentService) UpdateStudent(id string, req classroom.SaveStudentRequest) (classroom.Workspace, bool, error) {
+	workspace, err := s.repo.GetWorkspace(s.classID)
+	if err != nil {
+		return classroom.Workspace{}, false, err
+	}
+	if !studentExists(workspace.Students, id) {
+		return classroom.Workspace{}, false, nil
+	}
+	if err := s.repo.SaveStudent(s.classID, studentFromRequest(id, req)); err != nil {
+		return classroom.Workspace{}, false, err
+	}
+	workspace, err = s.repo.GetWorkspace(s.classID)
+	return workspace, true, err
+}
+
+func (s *PersistentService) CreateTeacher(req classroom.SaveTeacherRequest) (classroom.Workspace, error) {
+	teacher := teacherFromRequest(fmt.Sprintf("teacher-%d", time.Now().UnixNano()), req)
+	if teacher.Subject == "" {
+		teacher.Subject = "新学科"
+	}
+	if teacher.Teacher == "" {
+		teacher.Teacher = "新老师"
+	}
+	if teacher.Classes == "" {
+		teacher.Classes = "待设置范围"
+	}
+	if err := s.repo.SaveTeacher(s.classID, teacher); err != nil {
+		return classroom.Workspace{}, err
+	}
+	return s.repo.GetWorkspace(s.classID)
+}
+
+func (s *PersistentService) UpdateTeacher(id string, req classroom.SaveTeacherRequest) (classroom.Workspace, bool, error) {
+	workspace, err := s.repo.GetWorkspace(s.classID)
+	if err != nil {
+		return classroom.Workspace{}, false, err
+	}
+	if !teacherExists(workspace.Teachers, id) {
+		return classroom.Workspace{}, false, nil
+	}
+	if err := s.repo.SaveTeacher(s.classID, teacherFromRequest(id, req)); err != nil {
+		return classroom.Workspace{}, false, err
+	}
+	workspace, err = s.repo.GetWorkspace(s.classID)
+	return workspace, true, err
+}
+
+func (s *PersistentService) UpdatePolicy(id string, req classroom.SavePolicyRequest) (classroom.Workspace, bool, error) {
+	workspace, err := s.repo.GetWorkspace(s.classID)
+	if err != nil {
+		return classroom.Workspace{}, false, err
+	}
+	for _, policy := range workspace.Policies {
+		if policy.ID == id {
+			policy.Value = req.Value
+			policy.Note = req.Note
+			if err := s.repo.SavePolicy(s.classID, policy); err != nil {
+				return classroom.Workspace{}, false, err
+			}
+			workspace, err = s.repo.GetWorkspace(s.classID)
+			return workspace, true, err
+		}
+	}
+	return classroom.Workspace{}, false, nil
+}
+
+type MemoryService struct {
 	mu        sync.RWMutex
 	workspace classroom.Workspace
 }
 
-func NewService() *Service {
-	service := &Service{}
-	service.seed()
-	return service
+func NewMemoryService() *MemoryService {
+	return &MemoryService{workspace: withRosterInsights(defaultWorkspace())}
 }
 
-func (s *Service) GetWorkspace() classroom.Workspace {
+func (s *MemoryService) GetWorkspace() (classroom.Workspace, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.snapshotLocked()
+	return snapshot(s.workspace), nil
 }
 
-func (s *Service) CreateStudent(req classroom.SaveStudentRequest) classroom.Workspace {
+func (s *MemoryService) CreateStudent(req classroom.SaveStudentRequest) (classroom.Workspace, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -38,25 +156,25 @@ func (s *Service) CreateStudent(req classroom.SaveStudentRequest) classroom.Work
 		student.Name = "新学生"
 	}
 	s.workspace.Students = append([]classroom.Student{student}, s.workspace.Students...)
-	s.refreshRosterInsightsLocked()
-	return s.snapshotLocked()
+	s.workspace = withRosterInsights(s.workspace)
+	return snapshot(s.workspace), nil
 }
 
-func (s *Service) UpdateStudent(id string, req classroom.SaveStudentRequest) (classroom.Workspace, bool) {
+func (s *MemoryService) UpdateStudent(id string, req classroom.SaveStudentRequest) (classroom.Workspace, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i := range s.workspace.Students {
 		if s.workspace.Students[i].ID == id {
 			s.workspace.Students[i] = studentFromRequest(id, req)
-			s.refreshRosterInsightsLocked()
-			return s.snapshotLocked(), true
+			s.workspace = withRosterInsights(s.workspace)
+			return snapshot(s.workspace), true, nil
 		}
 	}
-	return classroom.Workspace{}, false
+	return classroom.Workspace{}, false, nil
 }
 
-func (s *Service) CreateTeacher(req classroom.SaveTeacherRequest) classroom.Workspace {
+func (s *MemoryService) CreateTeacher(req classroom.SaveTeacherRequest) (classroom.Workspace, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -71,25 +189,25 @@ func (s *Service) CreateTeacher(req classroom.SaveTeacherRequest) classroom.Work
 		teacher.Classes = "待设置范围"
 	}
 	s.workspace.Teachers = append([]classroom.TeacherAssignment{teacher}, s.workspace.Teachers...)
-	s.refreshRosterInsightsLocked()
-	return s.snapshotLocked()
+	s.workspace = withRosterInsights(s.workspace)
+	return snapshot(s.workspace), nil
 }
 
-func (s *Service) UpdateTeacher(id string, req classroom.SaveTeacherRequest) (classroom.Workspace, bool) {
+func (s *MemoryService) UpdateTeacher(id string, req classroom.SaveTeacherRequest) (classroom.Workspace, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i := range s.workspace.Teachers {
 		if s.workspace.Teachers[i].ID == id {
 			s.workspace.Teachers[i] = teacherFromRequest(id, req)
-			s.refreshRosterInsightsLocked()
-			return s.snapshotLocked(), true
+			s.workspace = withRosterInsights(s.workspace)
+			return snapshot(s.workspace), true, nil
 		}
 	}
-	return classroom.Workspace{}, false
+	return classroom.Workspace{}, false, nil
 }
 
-func (s *Service) UpdatePolicy(id string, req classroom.SavePolicyRequest) (classroom.Workspace, bool) {
+func (s *MemoryService) UpdatePolicy(id string, req classroom.SavePolicyRequest) (classroom.Workspace, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -97,26 +215,16 @@ func (s *Service) UpdatePolicy(id string, req classroom.SavePolicyRequest) (clas
 		if s.workspace.Policies[i].ID == id {
 			s.workspace.Policies[i].Value = req.Value
 			s.workspace.Policies[i].Note = req.Note
-			return s.snapshotLocked(), true
+			return snapshot(s.workspace), true, nil
 		}
 	}
-	return classroom.Workspace{}, false
+	return classroom.Workspace{}, false, nil
 }
 
-func (s *Service) snapshotLocked() classroom.Workspace {
-	snapshot := s.workspace
-	snapshot.BaseFields = append([]classroom.BaseField{}, s.workspace.BaseFields...)
-	snapshot.RosterInsights = append([]classroom.RosterInsight{}, s.workspace.RosterInsights...)
-	snapshot.Students = append([]classroom.Student{}, s.workspace.Students...)
-	snapshot.Teachers = append([]classroom.TeacherAssignment{}, s.workspace.Teachers...)
-	snapshot.Policies = append([]classroom.Policy{}, s.workspace.Policies...)
-	return snapshot
-}
-
-func (s *Service) refreshRosterInsightsLocked() {
+func withRosterInsights(workspace classroom.Workspace) classroom.Workspace {
 	parentReady := 0
 	selectionReady := 0
-	for _, student := range s.workspace.Students {
+	for _, student := range workspace.Students {
 		if student.ParentStatus == "已绑定" {
 			parentReady++
 		}
@@ -126,31 +234,47 @@ func (s *Service) refreshRosterInsightsLocked() {
 	}
 
 	teacherReady := 0
-	for _, teacher := range s.workspace.Teachers {
+	for _, teacher := range workspace.Teachers {
 		if teacher.AccountStatus == "bound" {
 			teacherReady++
 		}
 	}
 
-	totalStudents := len(s.workspace.Students)
-	totalTeachers := len(s.workspace.Teachers)
-	s.workspace.RosterInsights = []classroom.RosterInsight{
-		{
-			Title:  "已完成家长绑定",
-			Count:  fmt.Sprintf("%d / %d", parentReady, totalStudents),
-			Detail: fmt.Sprintf("%d 位学生缺少有效家长手机号，影响成绩同步。", totalStudents-parentReady),
-		},
-		{
-			Title:  "已完成选科登记",
-			Count:  fmt.Sprintf("%d / %d", selectionReady, totalStudents),
-			Detail: fmt.Sprintf("%d 位学生选科仍待确认，会影响选考科成绩校验。", totalStudents-selectionReady),
-		},
-		{
-			Title:  "任课老师已绑定账号",
-			Count:  fmt.Sprintf("%d / %d", teacherReady, totalTeachers),
-			Detail: fmt.Sprintf("%d 位任课老师尚未绑定账号，暂无法自动同步单科分析。", totalTeachers-teacherReady),
-		},
+	totalStudents := len(workspace.Students)
+	totalTeachers := len(workspace.Teachers)
+	workspace.RosterInsights = []classroom.RosterInsight{
+		{Title: "已完成家长绑定", Count: fmt.Sprintf("%d / %d", parentReady, totalStudents), Detail: fmt.Sprintf("%d 位学生缺少有效家长手机号，影响成绩同步。", totalStudents-parentReady)},
+		{Title: "已完成选科登记", Count: fmt.Sprintf("%d / %d", selectionReady, totalStudents), Detail: fmt.Sprintf("%d 位学生选科仍待确认，会影响选考科成绩校验。", totalStudents-selectionReady)},
+		{Title: "任课老师已绑定账号", Count: fmt.Sprintf("%d / %d", teacherReady, totalTeachers), Detail: fmt.Sprintf("%d 位任课老师尚未绑定账号，暂无法自动同步单科分析。", totalTeachers-teacherReady)},
 	}
+	return workspace
+}
+
+func snapshot(workspace classroom.Workspace) classroom.Workspace {
+	workspace.BaseFields = append([]classroom.BaseField{}, workspace.BaseFields...)
+	workspace.RosterInsights = append([]classroom.RosterInsight{}, workspace.RosterInsights...)
+	workspace.Students = append([]classroom.Student{}, workspace.Students...)
+	workspace.Teachers = append([]classroom.TeacherAssignment{}, workspace.Teachers...)
+	workspace.Policies = append([]classroom.Policy{}, workspace.Policies...)
+	return workspace
+}
+
+func studentExists(students []classroom.Student, id string) bool {
+	for _, student := range students {
+		if student.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func teacherExists(teachers []classroom.TeacherAssignment, id string) bool {
+	for _, teacher := range teachers {
+		if teacher.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func studentFromRequest(id string, req classroom.SaveStudentRequest) classroom.Student {
@@ -225,9 +349,9 @@ func splitCombination(combination string) []string {
 	return strings.Split(expanded, ",")
 }
 
-func (s *Service) seed() {
-	s.workspace = classroom.Workspace{
-		ClassID:   "admin-class-g2-3",
+func defaultWorkspace() classroom.Workspace {
+	return classroom.Workspace{
+		ClassID:   CurrentClassID,
 		ClassName: "高二（3）班",
 		Stage: classroom.SelectionStage{
 			ID:          "post-selection",
@@ -260,5 +384,4 @@ func (s *Service) seed() {
 			{ID: "policy-sync-trigger", Title: "同步策略", Value: "考试发布后触发", Note: "成绩分析完成后，再统一同步家长、学生与任课老师。"},
 		},
 	}
-	s.refreshRosterInsightsLocked()
 }
