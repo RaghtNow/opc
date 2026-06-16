@@ -11,15 +11,16 @@ type Exam struct {
 }
 
 type ScoreRow struct {
-	ID            string `json:"id"`
-	StudentID     string `json:"studentId"`
-	StudentName   string `json:"studentName"`
-	Chinese       string `json:"chinese"`
-	Math          string `json:"math"`
-	English       string `json:"english"`
-	ElectiveLabel string `json:"electiveLabel"`
-	ElectiveScore string `json:"electiveScore"`
-	Total         string `json:"total"`
+	ID            string            `json:"id"`
+	StudentID     string            `json:"studentId"`
+	StudentName   string            `json:"studentName"`
+	Chinese       string            `json:"chinese,omitempty"`
+	Math          string            `json:"math,omitempty"`
+	English       string            `json:"english,omitempty"`
+	ElectiveLabel string            `json:"electiveLabel,omitempty"`
+	ElectiveScore string            `json:"electiveScore,omitempty"`
+	SubjectScores map[string]string `json:"subjectScores"`
+	Total         string            `json:"total"`
 }
 
 type ImportIssue struct {
@@ -32,8 +33,8 @@ type ImportIssue struct {
 }
 
 type ExamDetail struct {
-	Exam   Exam         `json:"exam"`
-	Scores []ScoreRow   `json:"scores"`
+	Exam   Exam          `json:"exam"`
+	Scores []ScoreRow    `json:"scores"`
 	Issues []ImportIssue `json:"issues"`
 }
 
@@ -48,11 +49,35 @@ type ImportRequest struct {
 	Issues          []ImportIssue `json:"issues"`
 }
 
+type ValidationSummaryItem struct {
+	Field  string `json:"field"`
+	Result string `json:"result"`
+	Note   string `json:"note"`
+}
+
+type ValidationMetrics struct {
+	Total   int `json:"total"`
+	Matched int `json:"matched"`
+	Issues  int `json:"issues"`
+}
+
+type ImportValidationResult struct {
+	OK                bool                    `json:"ok"`
+	Rows              []map[string]string     `json:"rows"`
+	Headers           []string                `json:"headers"`
+	Issues            []ImportIssue           `json:"issues"`
+	Metrics           ValidationMetrics       `json:"metrics"`
+	ValidationSummary []ValidationSummaryItem `json:"validationSummary"`
+	ScoreRows         []ScoreRow              `json:"scoreRows"`
+	Error             string                  `json:"error,omitempty"`
+}
+
 type UpdateScoreRequest struct {
-	Chinese       string `json:"chinese"`
-	Math          string `json:"math"`
-	English       string `json:"english"`
-	ElectiveLabel string `json:"electiveLabel"`
-	ElectiveScore string `json:"electiveScore"`
-	Total         string `json:"total"`
+	Chinese       string            `json:"chinese,omitempty"`
+	Math          string            `json:"math,omitempty"`
+	English       string            `json:"english,omitempty"`
+	ElectiveLabel string            `json:"electiveLabel,omitempty"`
+	ElectiveScore string            `json:"electiveScore,omitempty"`
+	SubjectScores map[string]string `json:"subjectScores"`
+	Total         string            `json:"total"`
 }

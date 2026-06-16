@@ -124,11 +124,7 @@ const uploadValidationState = ref({
 const scoreEditForm = ref({
   id: '',
   studentName: '',
-  chinese: '',
-  math: '',
-  english: '',
-  electiveLabel: '',
-  elective: '',
+  subjectScores: {} as Record<string, string>,
   total: ''
 })
 
@@ -165,7 +161,15 @@ const selectedExam = computed(() => {
   return exams.value.find((item) => item.id === selectedExamId.value) ?? exams.value[0]
 })
 
-const scoreTableMode = computed(() => activeSelectionScenario.value.id)
+const selectedExamSubjects = computed(() => {
+  const subjects: string[] = selectedExam.value?.subjects ?? []
+  if (subjects.length > 0) return subjects
+  return ['语文', '数学', '英语']
+})
+
+const scoreGridStyle = computed(() => ({
+  gridTemplateColumns: `1.3fr repeat(${selectedExamSubjects.value.length}, minmax(86px, 0.75fr)) 0.85fr 1fr`
+}))
 
 const importBatchMetricsView = computed(() => {
   const pendingCount = issues.value.filter((item) => item.status !== '已修复').length
@@ -473,11 +477,9 @@ function openScoreEditor(scoreId: string) {
   scoreEditForm.value = {
     id: target.id,
     studentName: target.studentName,
-    chinese: target.chinese,
-    math: target.math,
-    english: target.english,
-    electiveLabel: target.electiveLabel,
-    elective: target.electiveScore,
+    subjectScores: Object.fromEntries(
+      selectedExamSubjects.value.map((subject: string) => [subject, target.subjectScores?.[subject] ?? ''])
+    ),
     total: target.total
   }
 
@@ -485,12 +487,14 @@ function openScoreEditor(scoreId: string) {
 }
 
 function saveScoreEdit() {
+  const subjectScores = scoreEditForm.value.subjectScores
   updateExamScore(selectedExamId.value, scoreEditForm.value.id, {
-    chinese: scoreEditForm.value.chinese,
-    math: scoreEditForm.value.math,
-    english: scoreEditForm.value.english,
-    electiveLabel: scoreEditForm.value.electiveLabel,
-    electiveScore: scoreEditForm.value.elective,
+    chinese: subjectScores['语文'] ?? '',
+    math: subjectScores['数学'] ?? '',
+    english: subjectScores['英语'] ?? '',
+    electiveLabel: selectedExamSubjects.value.filter((subject: string) => !['语文', '数学', '英语'].includes(subject)).join(''),
+    electiveScore: '',
+    subjectScores,
     total: scoreEditForm.value.total
   }).then((detail) => {
     scoreRows.value = detail.scores
@@ -987,24 +991,12 @@ onMounted(async () => {
             <div class="score-table-wrap top-gap">
               <div class="score-table-title">
                 <strong>考试成绩明细</strong>
-                <span>按学生展开，支持逐行修改成绩</span>
+                <span>按本次考试学科动态展示，支持逐行修改成绩</span>
               </div>
               <div class="table-list score-table-list">
-              <div v-if="scoreTableMode === 'pre-selection'" class="table-row table-header score-cols-pre">
+              <div class="table-row table-header score-cols-dynamic" :style="scoreGridStyle">
                 <span>学生</span>
-                <span>语文</span>
-                <span>数学</span>
-                <span>英语</span>
-                <span>通用科目总分</span>
-                <span>操作</span>
-              </div>
-              <div v-else class="table-row table-header score-cols-post">
-                <span>学生</span>
-                <span>语文</span>
-                <span>数学</span>
-                <span>英语</span>
-                <span>选科组合</span>
-                <span>选考总分</span>
+                <span v-for="subject in selectedExamSubjects" :key="subject">{{ subject }}</span>
                 <span>总分</span>
                 <span>操作</span>
               </div>
@@ -1012,20 +1004,12 @@ onMounted(async () => {
               <div
                 v-for="row in scoreRows"
                 :key="row.id"
-                :class="['table-row', scoreTableMode === 'pre-selection' ? 'score-cols-pre' : 'score-cols-post']"
+                class="table-row score-cols-dynamic"
+                :style="scoreGridStyle"
               >
                 <span>{{ row.studentName }}</span>
-                <span>{{ row.chinese }}</span>
-                <span>{{ row.math }}</span>
-                <span>{{ row.english }}</span>
-                <template v-if="scoreTableMode === 'pre-selection'">
-                  <span>{{ Number(row.chinese) + Number(row.math) + Number(row.english) }}</span>
-                </template>
-                <template v-else>
-                  <span>{{ row.electiveLabel }}</span>
-                  <span>{{ row.electiveScore }}</span>
-                  <span>{{ row.total }}</span>
-                </template>
+                <span v-for="subject in selectedExamSubjects" :key="subject">{{ row.subjectScores?.[subject] || '-' }}</span>
+                <span>{{ row.total }}</span>
                 <span class="row-actions">
                   <button type="button" class="ghost-btn tiny" @click="openScoreEditor(row.id)">修改成绩</button>
                 </span>
@@ -1493,38 +1477,14 @@ onMounted(async () => {
           <span>学生</span>
           <input v-model="scoreEditForm.studentName" type="text" disabled />
         </label>
-        <label>
-          <span>语文</span>
-          <input v-model="scoreEditForm.chinese" type="text" />
+        <label v-for="subject in selectedExamSubjects" :key="subject">
+          <span>{{ subject }}</span>
+          <input v-model="scoreEditForm.subjectScores[subject]" type="text" />
         </label>
         <label>
-          <span>数学</span>
-          <input v-model="scoreEditForm.math" type="text" />
+          <span>总分</span>
+          <input v-model="scoreEditForm.total" type="text" />
         </label>
-        <label>
-          <span>英语</span>
-          <input v-model="scoreEditForm.english" type="text" />
-        </label>
-        <template v-if="scoreTableMode === 'post-selection'">
-          <label>
-            <span>选科组合</span>
-            <input v-model="scoreEditForm.electiveLabel" type="text" />
-          </label>
-          <label>
-            <span>选考总分</span>
-            <input v-model="scoreEditForm.elective" type="text" />
-          </label>
-          <label>
-            <span>总分</span>
-            <input v-model="scoreEditForm.total" type="text" />
-          </label>
-        </template>
-        <template v-else>
-          <label>
-            <span>通用科目总分</span>
-            <input :value="Number(scoreEditForm.chinese) + Number(scoreEditForm.math) + Number(scoreEditForm.english)" type="text" disabled />
-          </label>
-        </template>
         <div class="row-actions">
           <button type="button" class="solid-btn small" @click="saveScoreEdit">保存成绩</button>
           <button type="button" class="ghost-btn small" @click="actionPanel = 'none'">取消</button>

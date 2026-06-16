@@ -77,6 +77,7 @@ export type ExamRecord = {
   type: string
   date: string
   subjectCoverage: string
+  subjects?: string[]
   importStatus: string
 }
 
@@ -117,11 +118,12 @@ export type ScoreTableRow = {
   id: string
   studentId: string
   studentName: string
-  chinese: string
-  math: string
-  english: string
-  electiveLabel: string
-  electiveScore: string
+  chinese?: string
+  math?: string
+  english?: string
+  electiveLabel?: string
+  electiveScore?: string
+  subjectScores: Record<string, string>
   total: string
 }
 
@@ -493,6 +495,7 @@ export const scoreEntries: ScoreTableRow[] = [
     english: '136',
     electiveLabel: '物化生',
     electiveScore: '278',
+    subjectScores: { 语文: '121', 数学: '128', 英语: '136', 物理: '94', 化学: '91', 生物: '93' },
     total: '663'
   },
   {
@@ -504,6 +507,7 @@ export const scoreEntries: ScoreTableRow[] = [
     english: '129',
     electiveLabel: '物化生',
     electiveScore: '266',
+    subjectScores: { 语文: '116', 数学: '122', 英语: '129', 物理: '89', 化学: '88', 生物: '89' },
     total: '633'
   },
   {
@@ -515,6 +519,7 @@ export const scoreEntries: ScoreTableRow[] = [
     english: '125',
     electiveLabel: '史地政',
     electiveScore: '249',
+    subjectScores: { 语文: '113', 数学: '104', 英语: '125', 历史: '84', 地理: '82', 政治: '83' },
     total: '591'
   },
   {
@@ -526,6 +531,7 @@ export const scoreEntries: ScoreTableRow[] = [
     english: '118',
     electiveLabel: '物化生',
     electiveScore: '241',
+    subjectScores: { 语文: '108', 数学: '96', 英语: '118', 物理: '82', 化学: '80', 生物: '79' },
     total: '563'
   }
 ]

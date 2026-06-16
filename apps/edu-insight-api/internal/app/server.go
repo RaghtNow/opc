@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	appclassroom "github.com/RaghtNow/opc/apps/edu-insight-api/internal/application/classroom"
+	appscore "github.com/RaghtNow/opc/apps/edu-insight-api/internal/application/score"
 	"github.com/RaghtNow/opc/apps/edu-insight-api/internal/config"
 	"github.com/RaghtNow/opc/apps/edu-insight-api/internal/httpapi"
 	platformdb "github.com/RaghtNow/opc/apps/edu-insight-api/internal/platform/db"
@@ -26,12 +27,12 @@ func NewServer() (*Server, error) {
 	engine := gin.New()
 	engine.Use(gin.Logger(), gin.Recovery())
 
-	classroomService, dbConn, err := bootstrapClassroomService(cfg)
+	classroomService, scoreService, dbConn, err := bootstrapServices(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	httpapi.RegisterRoutes(engine, cfg, classroomService)
+	httpapi.RegisterRoutes(engine, cfg, classroomService, scoreService)
 
 	return &Server{
 		engine: engine,
@@ -52,25 +53,30 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func bootstrapClassroomService(cfg config.Config) (appclassroom.Service, *sql.DB, error) {
+func bootstrapServices(cfg config.Config) (appclassroom.Service, appscore.Service, *sql.DB, error) {
 	if cfg.DBDSN == "" {
-		log.Println("DB_DSN is empty; using in-memory classroom service")
-		return appclassroom.NewMemoryService(), nil, nil
+		log.Println("DB_DSN is empty; using in-memory services")
+		return appclassroom.NewMemoryService(), appscore.NewMemoryService(), nil, nil
 	}
 
 	conn, err := platformdb.Open(cfg.DBDSN)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := platformdb.Migrate(conn, cfg.MigrationsDir); err != nil {
 		conn.Close()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	service, err := appclassroom.NewPersistentService(appclassroom.NewMySQLRepository(conn))
+	classroomService, err := appclassroom.NewPersistentService(appclassroom.NewMySQLRepository(conn))
 	if err != nil {
 		conn.Close()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	log.Println("using MySQL classroom service")
-	return service, conn, nil
+	scoreService, err := appscore.NewPersistentService(appscore.NewMySQLRepository(conn))
+	if err != nil {
+		conn.Close()
+		return nil, nil, nil, err
+	}
+	log.Println("using MySQL services")
+	return classroomService, scoreService, conn, nil
 }

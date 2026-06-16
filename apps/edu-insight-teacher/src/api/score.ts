@@ -12,11 +12,12 @@ export type ScoreRow = {
   id: string
   studentId: string
   studentName: string
-  chinese: string
-  math: string
-  english: string
-  electiveLabel: string
-  electiveScore: string
+  chinese?: string
+  math?: string
+  english?: string
+  electiveLabel?: string
+  electiveScore?: string
+  subjectScores: Record<string, string>
   total: string
 }
 
@@ -74,11 +75,12 @@ export async function updateExamScore(
   examID: string,
   scoreID: string,
   payload: {
-    chinese: string
-    math: string
-    english: string
-    electiveLabel: string
-    electiveScore: string
+    chinese?: string
+    math?: string
+    english?: string
+    electiveLabel?: string
+    electiveScore?: string
+    subjectScores: Record<string, string>
     total: string
   }
 ) {
