@@ -1053,7 +1053,7 @@ onMounted(async () => {
               <div class="task-item">
                 <strong>账号状态</strong>
                 <p>{{ selectedTeacher.accountStatus === 'bound' ? selectedTeacher.accountId : '待绑定教师账号' }}</p>
-                <span>{{ selectedTeacher.accountBoundAt || '需先维护手机号并执行绑定' }}</span>
+                <span>{{ selectedTeacher.accountBoundAt || '需先维护手机号并执行绑定，后续换手机号不改变账号 ID' }}</span>
               </div>
               <div class="task-item">
                 <strong>权限状态</strong>
@@ -1062,7 +1062,7 @@ onMounted(async () => {
               </div>
               <div class="task-item">
                 <strong>建议动作</strong>
-                <p>先维护手机号并绑定教师账号，再同步授权范围。</p>
+                <p>先维护手机号并绑定教师账号，再同步授权范围；手机号变更只更新登录凭证，不重建账号。</p>
                 <span>适用于跨班任课老师</span>
               </div>
             </div>
@@ -1653,7 +1653,7 @@ onMounted(async () => {
         <div class="task-item">
           <strong>账号与权限状态</strong>
           <p>账号绑定和权限同步由列表中的操作按钮执行，不能在编辑表单中手动改状态。</p>
-          <span>手机号是绑定教师账号的前置条件。</span>
+          <span>手机号是账号登录/联系凭证，账号 ID 保持稳定。</span>
         </div>
         <div class="row-actions">
           <button type="button" class="solid-btn small" @click="saveTeacherForm">保存任课老师</button>
@@ -1672,7 +1672,7 @@ onMounted(async () => {
         <div class="task-item">
           <strong>导入模板字段</strong>
           <p>学科、老师姓名、授课范围、手机号。</p>
-          <span>当前支持 CSV；有手机号会自动视为账号已绑定。</span>
+          <span>当前支持 CSV；手机号只作为待绑定凭证，不会自动生成账号。</span>
         </div>
         <div class="task-item">
           <strong>已选择文件</strong>
