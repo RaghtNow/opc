@@ -1,0 +1,58 @@
+CREATE TABLE IF NOT EXISTS classroom_classes (
+  id VARCHAR(64) PRIMARY KEY,
+  school_name VARCHAR(128) NOT NULL,
+  grade_name VARCHAR(64) NOT NULL,
+  class_name VARCHAR(64) NOT NULL,
+  homeroom_teacher VARCHAR(64) NOT NULL,
+  academic_year VARCHAR(32) NOT NULL,
+  class_status VARCHAR(32) NOT NULL,
+  stage_id VARCHAR(64) NOT NULL,
+  stage_label VARCHAR(64) NOT NULL,
+  stage_description VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS classroom_students (
+  id VARCHAR(64) PRIMARY KEY,
+  class_id VARCHAR(64) NOT NULL,
+  student_no VARCHAR(64) NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  gender VARCHAR(16) NOT NULL,
+  combination VARCHAR(64) NOT NULL,
+  elective_subjects JSON NOT NULL,
+  parent_mobile VARCHAR(32) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  parent_status VARCHAR(32) NOT NULL,
+  selection_status VARCHAR(32) NOT NULL,
+  profile_status VARCHAR(32) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_class_student_no (class_id, student_no),
+  CONSTRAINT fk_classroom_students_class FOREIGN KEY (class_id) REFERENCES classroom_classes(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS classroom_teachers (
+  id VARCHAR(64) PRIMARY KEY,
+  class_id VARCHAR(64) NOT NULL,
+  subject VARCHAR(64) NOT NULL,
+  teacher VARCHAR(64) NOT NULL,
+  classes VARCHAR(255) NOT NULL,
+  sync_status VARCHAR(64) NOT NULL,
+  account_status VARCHAR(32) NOT NULL,
+  permission_status VARCHAR(32) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_classroom_teachers_class FOREIGN KEY (class_id) REFERENCES classroom_classes(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS classroom_policies (
+  id VARCHAR(64) PRIMARY KEY,
+  class_id VARCHAR(64) NOT NULL,
+  title VARCHAR(128) NOT NULL,
+  value VARCHAR(128) NOT NULL,
+  note VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_classroom_policies_class FOREIGN KEY (class_id) REFERENCES classroom_classes(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

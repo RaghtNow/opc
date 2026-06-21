@@ -1,2 +1,4 @@
 node_modules/
 .openclaw/
+dist/
+apps/edu-insight-api/server
