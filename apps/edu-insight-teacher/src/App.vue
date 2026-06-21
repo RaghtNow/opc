@@ -2319,30 +2319,29 @@ watch(scopeMode, async () => {
           <div class="status-inline">正在基于真实考试成绩生成分析...</div>
         </article>
 
-        <section class="analysis-report-hero">
-          <div class="report-title-block">
-            <p class="panel-label">成绩分析报告</p>
-            <h2>{{ selectedExam?.name || latestInsightExamName || '最近一次考试' }}</h2>
-            <span>{{ analysisScopeNote }}</span>
-            <label v-if="!isOverallScope" class="report-exam-select">
-              <span>当前分析考试</span>
+        <section class="analysis-context-bar">
+          <div class="analysis-context-main">
+            <span class="context-mode">{{ analysisModeOptions.find((item) => item.id === analysisMode)?.label }}</span>
+            <span v-for="item in analysisReportContext" :key="item.label" class="context-chip">
+              <em>{{ item.label }}</em>
+              <strong>{{ item.value }}</strong>
+            </span>
+          </div>
+          <div class="analysis-context-actions">
+            <label v-if="!isOverallScope" class="context-select">
+              <span>考试</span>
               <select v-model="selectedExamId" @change="changeAnalysisExam">
                 <option v-for="exam in exams" :key="exam.id" :value="exam.id">
                   {{ exam.name }} · {{ exam.date }}
                 </option>
               </select>
             </label>
-            <p v-else class="report-exam-note">整体范围按各班最近一次考试聚合分析，班级对比页会展示各班采用的考试。</p>
+            <span v-else class="context-note">整体范围按各班最近一次考试聚合，班级对比页展示具体考试口径。</span>
           </div>
+        </section>
 
-          <div class="report-context-grid">
-            <div v-for="item in analysisReportContext" :key="item.label" class="report-context-card">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </div>
-          </div>
-
-          <div class="report-summary-card">
+        <template v-if="analysisMode === 'report'">
+          <section class="report-summary-panel">
             <div class="panel-head compact-head">
               <div>
                 <p class="panel-label">本次结论</p>
@@ -2353,10 +2352,8 @@ watch(scopeMode, async () => {
             <ul class="report-summary-list">
               <li v-for="item in analysisReportSummary" :key="item">{{ item }}</li>
             </ul>
-          </div>
-        </section>
+          </section>
 
-        <template v-if="analysisMode === 'report'">
           <section class="metrics-grid report-metrics-grid">
             <article v-for="metric in analysisMetrics" :key="metric.label" class="metric-card">
               <p>{{ metric.label }}</p>
@@ -3641,101 +3638,97 @@ a {
   box-shadow: var(--shadow);
 }
 
-.analysis-report-hero {
-  display: grid;
-  grid-template-columns: minmax(280px, 0.86fr) minmax(360px, 1.14fr);
-  gap: 16px;
-  margin-top: 18px;
-}
-
-.report-title-block,
-.report-summary-card,
-.report-context-card {
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  background: var(--panel);
-}
-
-.report-title-block {
-  grid-row: span 2;
-  min-height: 260px;
-  padding: 28px;
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(217, 154, 80, 0.26), transparent 34%),
-    linear-gradient(145deg, rgba(255, 253, 249, 0.96), rgba(245, 235, 219, 0.86));
-}
-
-.report-title-block h2 {
+.analysis-context-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   margin-top: 16px;
-  font-size: clamp(2rem, 3vw, 3.3rem);
-  line-height: 1.08;
-  letter-spacing: -0.08em;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 249, 0.92), rgba(247, 239, 228, 0.86));
+  box-shadow: 0 12px 34px rgba(70, 49, 23, 0.08);
 }
 
-.report-title-block span {
-  display: block;
-  max-width: 420px;
-  margin-top: 18px;
-  color: var(--muted);
-  line-height: 1.8;
-}
-
-.report-exam-select {
-  display: grid;
+.analysis-context-main,
+.analysis-context-actions {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  margin-top: 22px;
+  min-width: 0;
 }
 
-.report-exam-select span,
-.report-exam-note {
-  color: var(--muted);
+.analysis-context-main {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.analysis-context-main::-webkit-scrollbar {
+  display: none;
+}
+
+.context-mode,
+.context-chip,
+.context-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255, 253, 249, 0.76);
+  border: 1px solid rgba(74, 52, 24, 0.09);
+}
+
+.context-mode {
+  background: var(--ink);
+  color: #fff8ed;
   font-size: 0.86rem;
+  font-weight: 800;
 }
 
-.report-exam-select select {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid rgba(154, 91, 38, 0.2);
-  border-radius: 14px;
-  background: rgba(255, 253, 249, 0.84);
+.context-chip em,
+.context-select span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+}
+
+.context-chip strong {
+  max-width: 240px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-select select {
+  max-width: 260px;
+  border: 0;
+  background: transparent;
   color: var(--ink);
   outline: none;
 }
 
-.report-exam-note {
-  margin: 22px 0 0;
-  line-height: 1.7;
-}
-
-.report-context-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.report-context-card {
-  min-height: 92px;
-  padding: 16px;
-  border-radius: var(--radius-md);
-}
-
-.report-context-card span {
-  display: block;
+.context-note {
+  max-width: 360px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
-.report-context-card strong {
-  display: block;
-  margin-top: 12px;
-  font-size: 1rem;
-  line-height: 1.35;
-}
-
-.report-summary-card {
-  padding: 20px;
+.report-summary-panel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .compact-head {
@@ -4556,17 +4549,8 @@ a {
   .insight-grid,
   .decision-grid,
   .analysis-chart-grid,
-  .analysis-report-hero,
   .overview-chart-grid,
   .content-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .report-title-block {
-    grid-row: auto;
-  }
-
-  .report-context-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -4598,9 +4582,7 @@ a {
   .insight-grid,
   .decision-grid,
   .analysis-chart-grid,
-  .analysis-report-hero,
   .overview-chart-grid,
-  .report-context-grid,
   .compact-metrics,
   .content-grid,
   .table-row,
@@ -4613,6 +4595,24 @@ a {
   .score-cols-post,
   .preview-cols {
     grid-template-columns: 1fr;
+  }
+
+  .analysis-context-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analysis-context-actions {
+    justify-content: space-between;
+  }
+
+  .context-select {
+    width: 100%;
+  }
+
+  .context-select select {
+    flex: 1;
+    max-width: none;
   }
 
   .subject-grid {
