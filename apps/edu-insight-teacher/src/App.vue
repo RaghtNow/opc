@@ -62,6 +62,7 @@ const activeNav = ref('overview')
 const activeContextId = ref(workContexts[0].id)
 const scopeMode = ref<'single' | 'overall'>('single')
 const analysisMode = ref<'report' | 'transcript' | 'distribution' | 'compare' | 'trend' | 'student' | 'warning'>('report')
+const distributionMode = ref<'score' | 'rank' | 'percent' | 'grade'>('score')
 const overallAnalysisView = ref<'merged' | 'compare'>('merged')
 const activeSubjectClassId = ref(subjectScopeClasses[0].id)
 const availableWorkContexts = ref(structuredClone(workContexts))
@@ -663,6 +664,17 @@ const selectedStudentSubjectBars = computed<BarChartRow[]>(() => selectedAnalysi
   }
 }))
 
+const distributionModeOptions: Array<{
+  id: 'score' | 'rank' | 'percent' | 'grade'
+  label: string
+  note: string
+}> = [
+  { id: 'score', label: '分数段图', note: '按总分区间观察学生集中区域' },
+  { id: 'rank', label: '名次段图', note: '按班级排名区间观察梯队结构' },
+  { id: 'percent', label: 'N%名', note: '按前 10% / 20% / 50% 等观察头部与中段' },
+  { id: 'grade', label: '等级分布图', note: '按 A/B/C/D/E 等级观察整体水平' }
+]
+
 const rankingRows = computed(() => {
   return [...numericScoreRows.value]
     .sort((a, b) => b.totalValue - a.totalValue)
@@ -681,6 +693,96 @@ const rankingRows = computed(() => {
         tag: row.totalValue >= excellenceLine.value ? '高分突破' : row.totalValue < riskLine.value ? '重点帮扶' : '稳定中坚'
       }
     })
+})
+
+const activeDistributionOption = computed(() => (
+  distributionModeOptions.find((item) => item.id === distributionMode.value) ?? distributionModeOptions[0]
+))
+
+const rankDistributionRows = computed<DistributionRow[]>(() => {
+  const total = Math.max(rankingRows.value.length, 1)
+  const rankRanges = [
+    { label: '第 1-10 名', min: 1, max: 10, tone: 'strong' },
+    { label: '第 11-20 名', min: 11, max: 20, tone: 'steady' },
+    { label: '第 21-30 名', min: 21, max: 30, tone: 'steady' },
+    { label: '第 31 名以后', min: 31, max: Number.POSITIVE_INFINITY, tone: 'risk' }
+  ]
+  return rankRanges
+    .map((range) => {
+      const rows = rankingRows.value.filter((row) => row.rank >= range.min && row.rank <= range.max)
+      const percent = Math.round((rows.length / total) * 100)
+      return {
+        label: range.label,
+        range: rows.length ? namesOf(rows) : '暂无学生',
+        count: rows.length,
+        percent,
+        width: Math.max(6, percent),
+        tone: range.tone
+      }
+    })
+    .filter((row) => row.count > 0 || rankingRows.value.length > 0)
+})
+
+const percentRankDistributionRows = computed<DistributionRow[]>(() => {
+  const total = Math.max(rankingRows.value.length, 1)
+  const buckets = [
+    { label: '前 10%', from: 0, to: 0.1, tone: 'strong' },
+    { label: '10%-20%', from: 0.1, to: 0.2, tone: 'strong' },
+    { label: '20%-50%', from: 0.2, to: 0.5, tone: 'steady' },
+    { label: '50%-80%', from: 0.5, to: 0.8, tone: 'steady' },
+    { label: '后 20%', from: 0.8, to: 1, tone: 'risk' }
+  ]
+  return buckets.map((bucket) => {
+    const fromRank = Math.max(1, Math.floor(total * bucket.from) + 1)
+    const toRank = Math.max(fromRank, Math.ceil(total * bucket.to))
+    const rows = rankingRows.value.filter((row) => row.rank >= fromRank && row.rank <= toRank)
+    const percent = Math.round((rows.length / total) * 100)
+    return {
+      label: bucket.label,
+      range: `第 ${fromRank}-${toRank} 名 · ${rows.length ? namesOf(rows) : '暂无学生'}`,
+      count: rows.length,
+      percent,
+      width: Math.max(6, percent),
+      tone: bucket.tone
+    }
+  })
+})
+
+const gradeDistributionRows = computed<DistributionRow[]>(() => {
+  const total = Math.max(rankingRows.value.length, 1)
+  const highest = Math.max(classHighest.value, 1)
+  const gradeRules = [
+    { label: 'A 档', minRatio: 0.9, tone: 'strong', note: '高位稳定' },
+    { label: 'B 档', minRatio: 0.8, tone: 'strong', note: '良好基础' },
+    { label: 'C 档', minRatio: 0.7, tone: 'steady', note: '中坚提升' },
+    { label: 'D 档', minRatio: 0.6, tone: 'steady', note: '基础巩固' },
+    { label: 'E 档', minRatio: 0, tone: 'risk', note: '重点帮扶' }
+  ]
+  return gradeRules.map((rule, index) => {
+    const nextRatio = gradeRules[index - 1]?.minRatio ?? 1.01
+    const rows = rankingRows.value.filter((row) => {
+      const ratio = row.totalValue / highest
+      return ratio >= rule.minRatio && ratio < nextRatio
+    })
+    const percent = Math.round((rows.length / total) * 100)
+    const minScore = Math.ceil(highest * rule.minRatio)
+    const maxScore = index === 0 ? highest : Math.ceil(highest * nextRatio) - 1
+    return {
+      label: rule.label,
+      range: `${rule.note} · ${minScore}-${maxScore} 分`,
+      count: rows.length,
+      percent,
+      width: Math.max(6, percent),
+      tone: rule.tone
+    }
+  })
+})
+
+const activeDistributionRows = computed<DistributionRow[]>(() => {
+  if (distributionMode.value === 'rank') return rankDistributionRows.value
+  if (distributionMode.value === 'percent') return percentRankDistributionRows.value
+  if (distributionMode.value === 'grade') return gradeDistributionRows.value
+  return distributionRows.value
 })
 
 const transcriptGridStyle = computed(() => ({
@@ -2450,14 +2552,26 @@ watch(scopeMode, async () => {
 
         <template v-else-if="analysisMode === 'distribution'">
           <section class="content-grid">
-            <article class="panel">
+            <article class="panel distribution-main-panel">
               <div class="panel-head">
                 <div>
                   <p class="panel-label">水平分布</p>
-                  <h3>分数段与分层结构</h3>
+                  <h3>{{ activeDistributionOption.label }}</h3>
+                  <span class="panel-subtitle">{{ activeDistributionOption.note }}</span>
+                </div>
+                <div class="distribution-switch">
+                  <button
+                    v-for="option in distributionModeOptions"
+                    :key="option.id"
+                    type="button"
+                    :class="['switch-btn', { active: distributionMode === option.id }]"
+                    @click="distributionMode = option.id"
+                  >
+                    {{ option.label }}
+                  </button>
                 </div>
               </div>
-              <DistributionBars :rows="distributionRows" />
+              <DistributionBars :rows="activeDistributionRows" />
             </article>
 
             <article class="panel">
@@ -2475,6 +2589,10 @@ watch(scopeMode, async () => {
                   <span>均分 {{ formatNumber(classAverage) }}</span>
                   <span>最高 {{ formatNumber(classHighest) }}</span>
                 </div>
+              </div>
+              <div class="distribution-note-card">
+                <strong>{{ activeDistributionOption.label }}</strong>
+                <p>{{ activeDistributionOption.note }}。当前口径覆盖 {{ rankingRows.length }} 名学生，可和成绩单排名交叉验证。</p>
               </div>
             </article>
 
@@ -3997,6 +4115,64 @@ a {
 .action-grid {
   display: grid;
   gap: 12px;
+}
+
+.distribution-main-panel {
+  min-height: 360px;
+}
+
+.panel-subtitle {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.distribution-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 520px;
+  padding: 5px;
+  border: 1px solid rgba(74, 52, 24, 0.1);
+  border-radius: 999px;
+  background: rgba(248, 242, 232, 0.72);
+}
+
+.switch-btn {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.switch-btn.active {
+  background: var(--ink);
+  color: #fff8ed;
+  box-shadow: 0 8px 20px rgba(35, 29, 21, 0.16);
+}
+
+.distribution-note-card {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(154, 91, 38, 0.08);
+}
+
+.distribution-note-card strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.distribution-note-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 .layer-card-head,
